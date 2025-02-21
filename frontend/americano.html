@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Americano Tournament View</title>
+    <link rel="stylesheet" href="styles/americano.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Timer will be integrated from tournament-bracket.js -->
+        <div class="rounds-container">
+            <!-- Template for rounds -->
+            <template id="round-template">
+                <div class="round">
+                    <div class="round-header">
+                        <div>Round {roundNumber}/4</div>
+                        <div class="round-status status-{status}">{statusText}</div>
+                    </div>
+                    <!-- Matches will be inserted here -->
+                </div>
+            </template>
+
+            <!-- Template for matches -->
+            <template id="match-template">
+                <div class="match-container">
+                    <div class="team {teamColor}">
+                        <div class="player-row">
+                            <span data-player-id="{player1Id}">{player1Name}</span>
+                            <span class="score">{score1}</span>
+                        </div>
+                        <div class="player-row">
+                            <span data-player-id="{player2Id}">{player2Name}</span>
+                        </div>
+                    </div>
+                    <div class="court-name">{courtName}</div>
+                    <div class="team {teamColor}">
+                        <div class="player-row">
+                            <span data-player-id="{player3Id}">{player3Name}</span>
+                            <span class="score">{score2}</span>
+                        </div>
+                        <div class="player-row">
+                            <span data-player-id="{player4Id}">{player4Name}</span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Tournament data structure example -->
+            <script>
+                const tournamentData = {
+                    id: "tournament-1",
+                    format: "americano",
+                    status: "in_progress",
+                    currentRound: 2,
+                    players: [
+                        { id: "p1", name: "Lauri Luks", rating: 28.0, group: "green" },
+                        // ... more players
+                    ],
+                    rounds: [
+                        {
+                            roundNumber: 1,
+                            status: "completed",
+                            matches: [
+                                {
+                                    court: "Padel Arenas",
+                                    team1: ["p1", "p4"],
+                                    team2: ["p2", "p3"],
+                                    score1: 6,
+                                    score2: 4,
+                                    groupColor: "green"
+                                },
+                                // ... more matches
+                            ]
+                        },
+                        // ... more rounds
+                    ]
+                };
+            </script>
+        </div>
+
+        <!-- Groups standings -->
+        <div class="groups-container">
+            <!-- Template for group -->
+            <template id="group-template">
+                <div class="group {groupColor}">
+                    <div class="group-title">{groupName} Group</div>
+                    <!-- Players will be inserted here -->
+                </div>
+            </template>
+
+            <!-- Template for group player -->
+            <template id="group-player-template">
+                <div class="group-player">
+                    <div data-player-id="{playerId}">{playerName}</div>
+                    <div class="record">{wins}-{losses}</div>
+                    <div class="points">{points}</div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Script to handle dynamic rendering -->
+    <script>
+        // Example of how the data will be loaded and rendered
+        document.addEventListener('DOMContentLoaded', () => {
+            // In the future, this will come from localStorage or API
+            const tournament = window.localStorage.getItem('currentTournament');
+            if (tournament) {
+                renderTournament(JSON.parse(tournament));
+            }
+        });
+
+        function renderTournament(data) {
+            // Render rounds
+            data.rounds.forEach(round => {
+                const roundEl = document.getElementById('round-template')
+                    .content.cloneNode(true);
+                // ... populate round data
+                
+                // Render matches
+                round.matches.forEach(match => {
+                    const matchEl = document.getElementById('match-template')
+                        .content.cloneNode(true);
+                    // ... populate match data
+                });
+            });
+
+            // Render groups
+            const groups = ['green', 'blue', 'yellow', 'purple'];
+            groups.forEach(group => {
+                const groupEl = document.getElementById('group-template')
+                    .content.cloneNode(true);
+                // ... populate group data
+                
+                // Render players in group
+                const groupPlayers = data.players.filter(p => p.group === group);
+                groupPlayers.forEach(player => {
+                    const playerEl = document.getElementById('group-player-template')
+                        .content.cloneNode(true);
+                    // ... populate player data
+                });
+            });
+        }
+    </script>
+</body>
+</html>

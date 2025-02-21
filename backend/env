@@ -1,0 +1,6 @@
+DB_USER=padel_user
+DB_PASS=padel_pass
+DB_HOST=localhost
+DB_NAME=padel_db
+DB_PORT=5432
+PORT=5001
