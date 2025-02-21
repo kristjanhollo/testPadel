@@ -1,0 +1,640 @@
+/* Header */
+.tournament-header {
+    background-color: #2c3e50;
+    color: white;
+    padding: 30px;
+    text-align: center;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.tournament-header h1 {
+    margin: 0;
+    font-size: 32px;
+}
+
+/* Timer */
+.game-timer {
+    font-size: 96px;
+    font-weight: bold;
+    text-align: center;
+    padding: 30px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    color: #2c3e50;
+}
+
+.game-timer.time-up {
+    color: #e74c3c;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+.format-select {
+    margin-left: 10px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    font-size: 14px;
+}
+
+/* Controls Section */
+.controls-section {
+    background-color: #2c3e50;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.control-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.tournament-info {
+    display: flex;
+    gap: 20px;
+}
+
+.conflict-resolution {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: 20px 0;
+    padding: 20px;
+}
+
+.conflict-header {
+    border-bottom: 1px solid #ffcdd2;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+}
+
+.incomplete-courts {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.conflict-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.unassigned-players {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.player-card.draggable {
+    cursor: grab;
+}
+
+.player-card.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.player-card {
+    background: #e3f2fd;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.player-card.dragging {
+    opacity: 0.5;
+}
+
+.court-slot {
+    border: 2px dashed #e2e8f0;
+    border-radius: 6px;
+    padding: 15px;
+    text-align: center;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.court-slot.drag-over {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+/* Main Content Layout */
+.tournament-content {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.main-section {
+    flex: 2;
+    min-width: 0;
+}
+
+.standings-section {
+    flex: 1;
+    max-width: 300px;
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Registered Players Section */
+.registered-players {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.player-card {
+    background-color: #f8fafc;
+    padding: 10px 15px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.player-info {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-right: 10px;
+}
+
+.player-name {
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.player-rating {
+    color: #64748b;
+    font-size: 14px;
+}
+
+.btn-delete {
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 5px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.btn-delete:hover {
+    background-color: #fee2e2;
+}
+
+/* Current Round Styles */
+.current-round {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.current-players {
+    margin: 10px 0;
+}
+
+.matches-grid {
+    display: grid;
+    gap: 15px;
+}
+
+.match {
+    background-color: #f8fafc;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.match-info {
+    padding: 15px;
+}
+
+.court-name {
+    display: block;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    padding-left: 10px;
+}
+
+.court-container {
+    margin-bottom: 15px;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+}
+
+
+.team {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.team:last-child {
+    border-bottom: none;
+}
+
+.team-name {
+    flex: 1;
+}
+
+.score {
+    width: 40px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.score-input {
+    width: 40px;
+    padding: 2px 4px;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+}
+
+/* Standings Styles */
+.standings-grid {
+    display: grid;
+    gap: 8px;
+}
+
+.empty-standings {
+    text-align: center;
+    padding: 20px;
+    color: #64748b;
+    font-style: italic;
+    background-color: #f8fafc;
+    border-radius: 6px;
+}
+
+.standing-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background-color: #f8fafc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.rank {
+    font-weight: 600;
+    color: #2c3e50;
+    padding-right: 8px;
+}
+
+.points {
+    text-align: right;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.record {
+    text-align: right;
+    color: #64748b;
+    min-width: 45px;
+}
+
+/* Button Styles */
+.btn-primary {
+    background-color: white;
+    color: #2c3e50;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.btn-primary:hover {
+    background-color: #f8fafc;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Common Styles */
+h3 {
+    margin: 0 0 20px 0;
+    color: #2c3e50;
+    font-size: 18px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 10px;
+}
+
+/* Navigation */
+.navigation {
+    display: flex;
+    gap: 20px;
+}
+
+.nav-link {
+    color: #2c3e50;
+    text-decoration: none;
+}
+
+.nav-link:hover {
+    text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .tournament-content {
+        flex-direction: column;
+    }
+
+    .standings-section {
+        max-width: none;
+    }
+
+    .game-timer {
+        font-size: 64px;
+    }
+
+    .controls-section {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+
+    .control-buttons {
+        justify-content: center;
+    }
+
+    .tournament-info {
+        justify-content: center;
+    }
+}
+
+.game-score-table {
+    margin-top: 20px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.score-grid {
+    display: grid;
+    gap: 8px;
+}
+
+.score-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    padding: 4px;
+    background: #f5f5f5;
+}
+
+.game-score {
+    text-align: right;
+    font-weight: bold;
+}
+
+.page-nav {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+
+
+.rounds-container {
+    display: flex;
+    gap: 20px;
+}
+
+.round {
+    flex: 1;
+    padding: 15px;
+    border-radius: 10px;
+    background: #f8f9fa;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.round-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+
+
+.court-name {
+    font-weight: bold;
+    text-align: center;
+    margin-top: 5px;
+}
+
+.player-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+}
+
+.score-input {
+    width: 40px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.players-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    align-items: start;
+}
+
+.player-column {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.player-card {
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.player-name {
+    font-weight: bold;
+}
+
+.player-rating {
+    font-size: 14px;
+    color: #555;
+}
+
+.tournament-bracket {
+    max-width: 1000px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  
+  .bracket-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 20px;
+  }
+  
+  .court-section {
+    margin-bottom: 30px;
+  }
+  
+  .match-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  
+  .match-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .match-row:last-child {
+    border-bottom: none;
+  }
+  
+  .team-name {
+    flex-grow: 1;
+    color: #333;
+  }
+  
+ 
+  
+  .court-name {
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  
+  .score-editable {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 2px 4px;
+    width: 30px;
+    text-align: right;
+  }
+
+  .score {
+    min-width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-weight: 500;
+    color: #333;
+    margin-left: 8px;
+    transition: background-color 0.2s;
+}
+
+.score:hover {
+    background: #e5e5e5;
+}
+
+.score-input {
+    width: 32px;
+    height: 32px;
+    border: 2px solid #4a90e2;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    outline: none;
+    padding: 0;
+}
+
+.score-input:focus {
+    border-color: #2171d6;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
