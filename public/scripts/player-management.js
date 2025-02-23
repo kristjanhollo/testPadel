@@ -15,7 +15,7 @@ document.getElementById("searchPlayers").addEventListener("input", (e) => {
   );
   renderPlayers(filtered);
 });
-
+console.log('-test-');
 async function loadPlayers() {
   try {
     const snapshot = await db.collection('players').get();
