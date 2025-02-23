@@ -4,11 +4,11 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-	  "dev": "vite",                   // Runs the development server
-	  "start": "node server.js",       // Starts the backend server
-	  "build": "vite build",           // Builds the frontend for production
-	  "serve": "vite preview",         // Serves built frontend locally
-	  "deploy": "firebase deploy"      // Deploys to Firebase Hosting & Functions
+	  "dev": "vite",
+	  "start": "node server.js",
+	  "build": "vite build",
+	  "serve": "vite preview",
+	  "deploy": "firebase deploy"
 	},
 	"dependencies": {
 	  "express": "^4.18.2",
