@@ -133,17 +133,23 @@ class TournamentList {
         </div>
       </div>
       <div class="tournament-actions">
-        <button class="btn-view" onclick="TournamentList.viewTournament('${tournament.id}')">
-          View Tournament
+        <button class="btn-view" onclick="TournamentList.viewTournament('${tournament.id}', ${tournament.status_id})">
+          ${status === 'completed' ? 'View Results' : 'View Tournament'}
         </button>
       </div>
     `;
     return card;
   }
 
-  static viewTournament(tournamentId) {
+  static viewTournament(tournamentId, statusId) {
     localStorage.setItem('selectedTournament', tournamentId);
-    window.location.href = 'tournament-management.html';
+    
+    // Redirect to appropriate page based on status
+    if (statusId === 3) { // Completed tournament
+      window.location.href = 'tournament-stats.html';
+    } else {
+      window.location.href = 'tournament-management.html';
+    }
   }
 
   renderTournaments(tournamentList = this.tournaments) {

@@ -461,6 +461,31 @@ class TournamentManager {
     }
   }
 
+  async updateTournamentDisplay() {
+    if (!this.tournamentData) return;
+    
+    // Check if tournament is completed
+    if (this.tournamentData.status_id === 3) { // 3 = completed
+      // Redirect to tournament stats page
+      Swal.fire({
+        title: 'Tournament Completed',
+        text: 'This tournament is already completed. Redirecting to results page.',
+        icon: 'info',
+        timer: 2000,
+        showConfirmButton: false
+      }).then(() => {
+        window.location.href = 'tournament-stats.html';
+      });
+      return;
+    }
+    
+    // If not completed, show tournament info as normal
+    document.getElementById('tournamentName').textContent = this.tournamentData.name;
+    document.getElementById('tournamentDate').textContent = `Date: ${this.formatDate(this.tournamentData.start_date)}`;
+    document.getElementById('tournamentLocation').textContent = `Location: ${this.tournamentData.location}`;
+    document.getElementById('tournamentFormat').textContent = `Format: ${this.tournamentData.format}`;
+  }
+
   getCourtAssignmentsFromUI() {
     const assignments = {};
     

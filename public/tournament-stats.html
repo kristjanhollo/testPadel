@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padel Bandeja - Tournament Stats</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/tournament-stats.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header onclick="location.href='index.html'" style="cursor: pointer;">
+            <h1>Padel Bandeja</h1>
+            <p>Tournament Results</p>
+        </header>
+
+        <main>
+            <!-- Tournament Info -->
+            <div class="tournament-info">
+                <h2 id="tournamentName">Tournament Name</h2>
+                <div class="tournament-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Date:</span>
+                        <span id="tournamentDate">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Location:</span>
+                        <span id="tournamentLocation">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Format:</span>
+                        <span id="tournamentFormat">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Final Standings -->
+            <div class="stats-section">
+                <h3>Final Standings</h3>
+                <div class="final-standings" id="finalStandings">
+                    <!-- Standings will be populated here -->
+                </div>
+            </div>
+
+            <!-- Match Results by Round -->
+            <div class="stats-section">
+                <h3>Match Results</h3>
+                <div class="round-tabs" id="roundTabs">
+                    <!-- Round tabs will be generated here -->
+                </div>
+                <div class="round-content" id="roundContent">
+                    <!-- Round content will be populated here -->
+                </div>
+            </div>
+
+            <!-- Tournament Statistics -->
+            <div class="stats-section">
+                <h3>Tournament Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h4>Player Stats</h4>
+                        <div class="stat-list" id="playerStats">
+                            <!-- Player stats will be populated here -->
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Court Stats</h4>
+                        <div class="stat-list" id="courtStats">
+                            <!-- Court stats will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <nav class="page-nav">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="tournament-list.html" class="nav-link">Tournament List</a>
+            <a href="player-rankings.html" class="nav-link">Player Rankings</a>
+        </nav>
+    </div>
+
+</body>
+</html>

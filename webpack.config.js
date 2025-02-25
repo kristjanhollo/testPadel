@@ -3,6 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const Dotenv = require('dotenv-webpack');
 
 // Define HTML pages to process
 const htmlPages = [
@@ -14,7 +15,8 @@ const htmlPages = [
   { name: 'tournament-bracket-M', chunk: 'tournament-bracket-m' },
   { name: 'tournament-create', chunk: 'tournament-create' },
   { name: 'tournament-list', chunk: 'tournament-list' },
-  { name: 'tournament-management', chunk: 'tournament-management' }
+  { name: 'tournament-management', chunk: 'tournament-management' },
+  { name: 'tournament-stats', chunk: 'tournament-stats' } // Add tournament stats page
 ];
 
 // Generate HtmlWebpackPlugin instances for each page
@@ -59,6 +61,7 @@ module.exports = (env, argv) => {
       'tournament-create': './public/scripts/tournament-create.js',
       'tournament-list': './public/scripts/tournament-list.js',
       'tournament-management': './public/scripts/tournament-management.js',
+      'tournament-stats': './public/scripts/tournament-stats.js', // Add tournament stats entry
     },
     
     output: {
@@ -104,6 +107,8 @@ module.exports = (env, argv) => {
     
     plugins: [
       // Extract CSS into separate files
+      new Dotenv(),
+
       new MiniCssExtractPlugin({
         filename: 'styles/[name].[contenthash].css'
       }),
@@ -139,7 +144,6 @@ module.exports = (env, argv) => {
           extractComments: false,
         }),
       ],
-      
       
     },
     
