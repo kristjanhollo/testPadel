@@ -1,3 +1,5 @@
+import firebaseService from './services/firebase-service.js';
+
 class TournamentList {
   constructor() {
     // DOM Elements
@@ -43,7 +45,7 @@ class TournamentList {
   async fetchTournaments() {
     try {
       // Use Firebase service to get tournaments
-      this.tournaments = await window.firebaseService.getAllTournaments();
+      this.tournaments = await firebaseService.getAllTournaments();
       console.log('Fetched tournaments:', this.tournaments);
 
       if (this.tournaments.length === 0) {
@@ -199,7 +201,7 @@ class TournamentList {
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   // Ensure Firebase service is loaded
-  if (!window.firebaseService) {
+  if (!firebaseService) {
     console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
     return;
   }

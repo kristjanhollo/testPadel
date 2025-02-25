@@ -1,4 +1,5 @@
-// Constants and configurations
+import firebaseService from './services/firebase-service.js';
+
 const TOURNAMENT_FORMATS = {
   MEXICANO: 'Mexicano',
   AMERICANO: 'Americano'
@@ -28,7 +29,7 @@ class TournamentCreator {
 
   init() {
     // Check if Firebase service is available
-    if (!window.firebaseService) {
+    if (!firebaseService) {
       console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
       return;
     }

@@ -357,7 +357,7 @@ class TournamentBracketMexicano {
 
   async generateFirstRound(bracketData) {
     const sortedPlayers = [...this.players].sort(PlayerSortUtils.byRating);
-    
+    console.log(sortedPlayers);
     this.COURT_ORDER.forEach((courtName, index) => {
       const courtPlayers = sortedPlayers.slice(index * 4, (index + 1) * 4);
       if (courtPlayers.length >= 4) {
@@ -974,4 +974,10 @@ class TournamentBracketMexicano {
     }
   } catch (error) {}}
   
+  document.addEventListener('DOMContentLoaded', () => {
+    new TournamentBracketMexicano();
+  });
+
+
+
 export default TournamentBracketMexicano;

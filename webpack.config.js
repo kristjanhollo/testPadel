@@ -4,23 +4,25 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 
-const htmlPageNames = [
-  'index',
-  'player-management',
-  'player-profile',
-  'player-rankings',
-  'tournament-bracket',
-  'tournament-bracket-M',
-  'tournament-create',
-  'tournament-list',
-  'tournament-management'
+// Define HTML pages to process
+const htmlPages = [
+  { name: 'index', chunk: 'index' },
+  { name: 'player-management', chunk: 'player-management' },
+  { name: 'player-profile', chunk: 'player-profile' },
+  { name: 'player-rankings', chunk: 'player-rankings' },
+  { name: 'tournament-bracket', chunk: 'tournament-bracket' },
+  { name: 'tournament-bracket-M', chunk: 'tournament-bracket-m' },
+  { name: 'tournament-create', chunk: 'tournament-create' },
+  { name: 'tournament-list', chunk: 'tournament-list' },
+  { name: 'tournament-management', chunk: 'tournament-management' }
 ];
 
-const multipleHtmlPlugins = htmlPageNames.map(name => {
+// Generate HtmlWebpackPlugin instances for each page
+const multipleHtmlPlugins = htmlPages.map(({ name, chunk }) => {
   return new HtmlWebpackPlugin({
     template: `./public/${name}.html`,
     filename: `${name}.html`,
-    chunks: ['shared', name],
+    chunks: ['vendors', 'common', chunk],
     minify: {
       collapseWhitespace: true,
       removeComments: true,
@@ -37,34 +39,47 @@ module.exports = (env, argv) => {
   
   return {
     entry: {
-      'shared': './public/scripts/shared-dependencies.js',
-      // Define entry points for each page
+      // Vendor bundle with shared dependencies
+      vendors: [
+        'firebase/app',
+        'firebase/firestore',
+        'sweetalert2'
+      ],
+      
+      // Common utilities
+      common: './public/scripts/firebase-init.js',
+      
+      // Page-specific entry points - each corresponds to an HTML page
       'index': './public/scripts/main.js',
       'player-management': './public/scripts/player-management.js',
       'player-profile': './public/scripts/player-profile.js',
       'player-rankings': './public/scripts/player-rankings.js',
       'tournament-bracket': './public/scripts/tournament-bracket.js',
-      'tournament-bracket-M': './public/scripts/tournament-bracket-Mexicano.js',
+      'tournament-bracket-m': './public/scripts/tournament-bracket-Mexicano.js',
       'tournament-create': './public/scripts/tournament-create.js',
       'tournament-list': './public/scripts/tournament-list.js',
       'tournament-management': './public/scripts/tournament-management.js',
     },
+    
     output: {
       filename: 'scripts/[name].[contenthash].js',
       path: path.resolve(__dirname, 'dist'),
       clean: true
     },
-    devtool: isProduction ? 'source-map' : 'inline-source-map',
-    devServer: {
-      static: {
-        directory: path.join(__dirname, 'public'),
-      },
-      hot: true,
-      compress: true,
-      port: 9000,
+    
+    resolve: {
+      extensions: ['.js', '.json'],
+      alias: {
+        // Add aliases for easier imports
+        '@': path.resolve(__dirname, 'public'),
+        '@services': path.resolve(__dirname, 'public/scripts/services'),
+        '@utils': path.resolve(__dirname, 'public/scripts/utils'),
+      }
     },
+    
     module: {
       rules: [
+        // JavaScript files
         {
           test: /\.js$/,
           exclude: /node_modules/,
@@ -75,6 +90,8 @@ module.exports = (env, argv) => {
             }
           }
         },
+        
+        // CSS files
         {
           test: /\.css$/,
           use: [
@@ -84,26 +101,35 @@ module.exports = (env, argv) => {
         }
       ]
     },
+    
     plugins: [
+      // Extract CSS into separate files
       new MiniCssExtractPlugin({
         filename: 'styles/[name].[contenthash].css'
       }),
+      
+      // Copy static assets
       new CopyWebpackPlugin({
         patterns: [
-          { 
-            from: 'public/styles', 
-            to: 'styles' 
-          },
-          {
-            from: 'public/404.html',
-            to: '404.html'
-          }
+          // Static files
+          { from: 'public/styles', to: 'styles' },
+          { from: 'public/404.html', to: '404.html' },
+          
+          // Images, if you have any
+          // { from: 'public/images', to: 'images' },
+          
+          // Any other static files
+          // { from: 'public/favicon.ico', to: 'favicon.ico' },
         ]
       }),
+      
+      // Add all HTML page plugins
       ...multipleHtmlPlugins
     ],
+    
     optimization: {
       minimizer: [
+        // Minimize JavaScript
         new TerserPlugin({
           terserOptions: {
             format: {
@@ -113,22 +139,21 @@ module.exports = (env, argv) => {
           extractComments: false,
         }),
       ],
-      splitChunks: {
-        chunks: 'all',
-        cacheGroups: {
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
-            chunks: 'all'
-          },
-          common: {
-            name: 'common',
-            minChunks: 2,
-            chunks: 'all',
-            priority: -20
-          }
-        }
-      }
+      
+      
+    },
+    
+    devtool: isProduction ? 'source-map' : 'inline-source-map',
+    
+    devServer: {
+      static: {
+        directory: path.join(__dirname, 'public'),
+      },
+      hot: true,
+      compress: true,
+      port: 9000,
+      historyApiFallback: true,
+      open: true
     }
   };
 };

@@ -1,5 +1,5 @@
-// Firebase Service
-// This service handles all Firebase interactions for the application
+// Import Firebase dependencies
+import { db } from '../firebase-init';
 
 import { 
   collection, 
@@ -17,11 +17,12 @@ import {
   writeBatch
 } from 'firebase/firestore';
 
+/**
+ * Firebase Service
+ * Manages all Firebase interactions for the application
+ */
 class FirebaseService {
   constructor() {
-    // Get the Firestore instance from the shared dependency
-    this.db = window.firestoreDB;
-    
     // Collections
     this.collections = {
       PLAYERS: 'players',
@@ -32,10 +33,13 @@ class FirebaseService {
 
   // ------ PLAYERS ------
   
-  // Get all players
+  /**
+   * Get all players from the database
+   * @returns {Promise<Array>} List of player objects
+   */
   async getAllPlayers() {
     try {
-      const playersRef = collection(this.db, this.collections.PLAYERS);
+      const playersRef = collection(db, this.collections.PLAYERS);
       const snapshot = await getDocs(playersRef);
       return snapshot.docs.map(doc => ({
         id: doc.id,
@@ -47,10 +51,14 @@ class FirebaseService {
     }
   }
   
-  // Get player by ID
+  /**
+   * Get a player by ID
+   * @param {string} playerId - The player's ID
+   * @returns {Promise<Object|null>} Player data or null if not found
+   */
   async getPlayer(playerId) {
     try {
-      const docRef = doc(this.db, this.collections.PLAYERS, playerId);
+      const docRef = doc(db, this.collections.PLAYERS, playerId);
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
@@ -67,10 +75,14 @@ class FirebaseService {
     }
   }
   
-  // Add a new player
+  /**
+   * Add a new player
+   * @param {Object} playerData - The player data to add
+   * @returns {Promise<string>} The new player's ID
+   */
   async addPlayer(playerData) {
     try {
-      const playersRef = collection(this.db, this.collections.PLAYERS);
+      const playersRef = collection(db, this.collections.PLAYERS);
       const docRef = await addDoc(playersRef, {
         ...playerData,
         created_at: serverTimestamp(),
@@ -83,10 +95,15 @@ class FirebaseService {
     }
   }
   
-  // Update player
+  /**
+   * Update an existing player
+   * @param {string} playerId - The player's ID
+   * @param {Object} playerData - The updated data
+   * @returns {Promise<boolean>} Success indicator
+   */
   async updatePlayer(playerId, playerData) {
     try {
-      const playerRef = doc(this.db, this.collections.PLAYERS, playerId);
+      const playerRef = doc(db, this.collections.PLAYERS, playerId);
       await updateDoc(playerRef, {
         ...playerData,
         lastActive: serverTimestamp()
@@ -98,10 +115,14 @@ class FirebaseService {
     }
   }
   
-  // Delete player
+  /**
+   * Delete a player
+   * @param {string} playerId - The player's ID
+   * @returns {Promise<boolean>} Success indicator
+   */
   async deletePlayer(playerId) {
     try {
-      const playerRef = doc(this.db, this.collections.PLAYERS, playerId);
+      const playerRef = doc(db, this.collections.PLAYERS, playerId);
       await deleteDoc(playerRef);
       return true;
     } catch (error) {
@@ -110,13 +131,17 @@ class FirebaseService {
     }
   }
   
-  // Add multiple players at once
+  /**
+   * Add multiple players in a batch operation
+   * @param {Array<Object>} players - List of player objects
+   * @returns {Promise<boolean>} Success indicator
+   */
   async addMultiplePlayers(players) {
     try {
-      const batch = writeBatch(this.db);
+      const batch = writeBatch(db);
       
       players.forEach(player => {
-        const playerRef = doc(collection(this.db, this.collections.PLAYERS));
+        const playerRef = doc(collection(db, this.collections.PLAYERS));
         batch.set(playerRef, {
           ...player,
           created_at: serverTimestamp(),
@@ -134,10 +159,13 @@ class FirebaseService {
   
   // ------ TOURNAMENTS ------
   
-  // Get all tournaments
+  /**
+   * Get all tournaments
+   * @returns {Promise<Array>} List of tournament objects
+   */
   async getAllTournaments() {
     try {
-      const tournamentsRef = collection(this.db, this.collections.TOURNAMENTS);
+      const tournamentsRef = collection(db, this.collections.TOURNAMENTS);
       const snapshot = await getDocs(tournamentsRef);
       return snapshot.docs.map(doc => ({
         id: doc.id,
@@ -149,10 +177,14 @@ class FirebaseService {
     }
   }
   
-  // Get tournament by ID
+  /**
+   * Get a tournament by ID
+   * @param {string} tournamentId - The tournament's ID
+   * @returns {Promise<Object|null>} Tournament data or null if not found
+   */
   async getTournament(tournamentId) {
     try {
-      const docRef = doc(this.db, this.collections.TOURNAMENTS, tournamentId);
+      const docRef = doc(db, this.collections.TOURNAMENTS, tournamentId);
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
@@ -169,7 +201,11 @@ class FirebaseService {
     }
   }
   
-  // Create a new tournament
+  /**
+   * Create a new tournament
+   * @param {Object} tournamentData - The tournament data
+   * @returns {Promise<Object>} The created tournament
+   */
   async createTournament(tournamentData) {
     try {
       // Format courts as an array if it's not already
@@ -177,7 +213,7 @@ class FirebaseService {
         tournamentData.courts = Object.values(tournamentData.courts);
       }
       
-      const tournamentsRef = collection(this.db, this.collections.TOURNAMENTS);
+      const tournamentsRef = collection(db, this.collections.TOURNAMENTS);
       const docRef = await addDoc(tournamentsRef, {
         ...tournamentData,
         created_at: serverTimestamp(),
@@ -194,10 +230,15 @@ class FirebaseService {
     }
   }
   
-  // Update tournament
+  /**
+   * Update a tournament
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Object} tournamentData - The updated data
+   * @returns {Promise<boolean>} Success indicator
+   */
   async updateTournament(tournamentId, tournamentData) {
     try {
-      const tournamentRef = doc(this.db, this.collections.TOURNAMENTS, tournamentId);
+      const tournamentRef = doc(db, this.collections.TOURNAMENTS, tournamentId);
       await updateDoc(tournamentRef, {
         ...tournamentData,
         updated_at: serverTimestamp()
@@ -209,10 +250,14 @@ class FirebaseService {
     }
   }
   
-  // Delete tournament
+  /**
+   * Delete a tournament
+   * @param {string} tournamentId - The tournament's ID
+   * @returns {Promise<boolean>} Success indicator
+   */
   async deleteTournament(tournamentId) {
     try {
-      const tournamentRef = doc(this.db, this.collections.TOURNAMENTS, tournamentId);
+      const tournamentRef = doc(db, this.collections.TOURNAMENTS, tournamentId);
       await deleteDoc(tournamentRef);
       return true;
     } catch (error) {
@@ -223,10 +268,14 @@ class FirebaseService {
   
   // ------ TOURNAMENT BRACKETS ------
   
-  // Get tournament bracket
+  /**
+   * Get a tournament bracket
+   * @param {string} tournamentId - The tournament's ID
+   * @returns {Promise<Object|null>} Bracket data or null if not found
+   */
   async getTournamentBracket(tournamentId) {
     try {
-      const docRef = doc(this.db, this.collections.BRACKETS, tournamentId);
+      const docRef = doc(db, this.collections.BRACKETS, tournamentId);
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
@@ -243,10 +292,15 @@ class FirebaseService {
     }
   }
   
-  // Create or update tournament bracket
+  /**
+   * Save tournament bracket data
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Object} bracketData - The bracket data to save
+   * @returns {Promise<boolean>} Success indicator
+   */
   async saveTournamentBracket(tournamentId, bracketData) {
     try {
-      const bracketRef = doc(this.db, this.collections.BRACKETS, tournamentId);
+      const bracketRef = doc(db, this.collections.BRACKETS, tournamentId);
       await setDoc(bracketRef, {
         ...bracketData,
         updated_at: serverTimestamp()
@@ -260,10 +314,14 @@ class FirebaseService {
   
   // ------ TOURNAMENT PLAYERS ------
   
-  // Get players for a tournament
+  /**
+   * Get players for a tournament
+   * @param {string} tournamentId - The tournament's ID
+   * @returns {Promise<Array>} List of player objects
+   */
   async getTournamentPlayers(tournamentId) {
     try {
-      const docRef = doc(this.db, this.collections.TOURNAMENTS, tournamentId, 'tournament_players', 'players_list');
+      const docRef = doc(db, this.collections.TOURNAMENTS, tournamentId, 'tournament_players', 'players_list');
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
@@ -277,10 +335,15 @@ class FirebaseService {
     }
   }
   
-  // Update players for a tournament
+  /**
+   * Update players for a tournament
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Array} playersList - List of player objects
+   * @returns {Promise<boolean>} Success indicator
+   */
   async updateTournamentPlayers(tournamentId, playersList) {
     try {
-      const docRef = doc(this.db, this.collections.TOURNAMENTS, tournamentId, 'tournament_players', 'players_list');
+      const docRef = doc(db, this.collections.TOURNAMENTS, tournamentId, 'tournament_players', 'players_list');
       await setDoc(docRef, {
         players: playersList,
         updated_at: serverTimestamp()
@@ -294,9 +357,14 @@ class FirebaseService {
   
   // ------ REAL-TIME LISTENERS ------
   
-  // Listen for changes to a tournament
+  /**
+   * Listen for changes to a tournament
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Function} callback - Function to call with updated data
+   * @returns {Function} Unsubscribe function
+   */
   listenToTournament(tournamentId, callback) {
-    const docRef = doc(this.db, this.collections.TOURNAMENTS, tournamentId);
+    const docRef = doc(db, this.collections.TOURNAMENTS, tournamentId);
     return onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         callback({
@@ -311,9 +379,14 @@ class FirebaseService {
     });
   }
   
-  // Listen for changes to a tournament bracket
+  /**
+   * Listen for changes to a tournament bracket
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Function} callback - Function to call with updated data
+   * @returns {Function} Unsubscribe function
+   */
   listenToTournamentBracket(tournamentId, callback) {
-    const docRef = doc(this.db, this.collections.BRACKETS, tournamentId);
+    const docRef = doc(db, this.collections.BRACKETS, tournamentId);
     return onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         callback({
@@ -328,9 +401,14 @@ class FirebaseService {
     });
   }
   
-  // Listen for changes to tournament players
+  /**
+   * Listen for changes to tournament players
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Function} callback - Function to call with updated data
+   * @returns {Function} Unsubscribe function
+   */
   listenToTournamentPlayers(tournamentId, callback) {
-    const docRef = doc(this.db, this.collections.TOURNAMENTS, tournamentId, 'tournament_players', 'players_list');
+    const docRef = doc(db, this.collections.TOURNAMENTS, tournamentId, 'tournament_players', 'players_list');
     return onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         callback(docSnap.data().players || []);
@@ -344,12 +422,19 @@ class FirebaseService {
   
   // ------ UTILITY METHODS ------
   
-  // Generate a timestamp
+  /**
+   * Generate a server timestamp
+   * @returns {FieldValue} Server timestamp
+   */
   timestamp() {
     return serverTimestamp();
   }
   
-  // Convert to UTC date string from firestore timestamp
+  /**
+   * Format a Firestore timestamp
+   * @param {Timestamp} firestoreTimestamp - Firestore timestamp
+   * @returns {string} Formatted date string
+   */
   formatDate(firestoreTimestamp) {
     if (!firestoreTimestamp) return 'N/A';
     
@@ -363,9 +448,10 @@ class FirebaseService {
   }
 }
 
-// Initialize and export the service
+// Create and export service instance
 const firebaseService = new FirebaseService();
-export default firebaseService;
 
-// Also make it available globally for backward compatibility
+// For backward compatibility
 window.firebaseService = firebaseService;
+
+export default firebaseService;
