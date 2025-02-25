@@ -27,6 +27,8 @@ class TournamentBracketMexicano {
     this.standings = document.getElementById('standings');
     this.registeredPlayersContainer = document.getElementById('registeredPlayers');
     this.playersGrid = this.registeredPlayersContainer?.querySelector('.players-grid');
+    this.roundTabs = document.getElementById('roundTabs');
+    this.roundContent = document.getElementById('roundContent');
     
     // State
     this.selectedTournamentId = localStorage.getItem('selectedTournament');
@@ -160,7 +162,12 @@ class TournamentBracketMexicano {
       this.playerCountEl.textContent = `${this.players.length} Players`;
     }
     
-    // Render matches
+    // Set the active round to the current round in bracket data
+    this.activeRound = this.bracketData.currentRound;
+    
+   
+    
+    // Render matches for the current round
     this.renderMatches();
     
     // Render standings
@@ -174,6 +181,9 @@ class TournamentBracketMexicano {
     
     // Check for completed tournament
     this.checkRoundCompletion();
+
+     // Render round tabs for navigation
+     this.renderRoundTabs();
   }
   
   setupEventListeners() {
@@ -207,26 +217,240 @@ class TournamentBracketMexicano {
       this.deletePlayer(playerId);
     };
   }
+
+  async confirmPreviousRoundEdit(roundNumber) {
+    // Ask user to confirm they want to edit a previous round
+    const result = await Swal.fire({
+      title: 'Edit Previous Round?',
+      text: `Going back to edit Round ${roundNumber} will clear all results from subsequent rounds. Are you sure?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, edit round',
+      cancelButtonText: 'Cancel'
+    });
+    
+    if (!result.isConfirmed) {
+      // Reset tab selection to current round
+      document.querySelectorAll('.round-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (parseInt(tab.dataset.round) === this.activeRound) {
+          tab.classList.add('active');
+        }
+      });
+      return;
+    }
+    
+    try {
+      // Show loading indicator
+      Swal.fire({
+        title: 'Resetting subsequent rounds...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Create a deep copy of bracket data to modify
+      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
+      
+      // Keep only the matches from rounds up to the selected round
+      updatedBracketData.completedMatches = updatedBracketData.completedMatches.filter(
+        match => match.round <= roundNumber
+      );
+      
+      // Clear all existing matches in courts
+      updatedBracketData.courts.forEach(court => {
+        court.matches = [];
+      });
+      
+      // Set current round to the selected round
+      updatedBracketData.currentRound = roundNumber;
+      
+      // Recalculate standings based on remaining matches
+      this.recalculateStandings(updatedBracketData);
+      
+      // Save updated bracket data
+      await firebaseService.saveTournamentBracket(
+        this.selectedTournamentId,
+        updatedBracketData
+      );
+      
+      // Update active round
+      this.activeRound = roundNumber;
+      
+      Swal.close();
+      
+      // Success message
+      await Swal.fire({
+        title: 'Round Reset',
+        text: `Successfully reset to Round ${roundNumber}. You can now edit the results.`,
+        icon: 'success',
+        timer: 2000
+      });
+      
+      // Show registered players if going back to round 0
+      if (roundNumber === 0 && this.registeredPlayersContainer) {
+        this.registeredPlayersContainer.style.display = 'block';
+      }
+    } catch (error) {
+      Swal.close();
+      console.error('Error resetting rounds:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to reset rounds. Please try again.',
+        icon: 'error'
+      });
+    }
+  }
+  renderRoundTabs() {
+    if (!this.roundTabs) {
+      console.warn('Round tabs element not found in the DOM. Make sure you have added the HTML element with id "roundTabs".');
+      return; // Exit the function if the element doesn't exist
+    }
+  
+    // Clear previous content
+    this.roundTabs.innerHTML = '';
+    
+    // Determine total rounds
+    const totalRounds = this.bracketData.currentRound || 4;
+    
+    // Create tab for each round (including past rounds)
+    for (let i = 1; i <= totalRounds; i++) {
+      const roundTab = document.createElement('div');
+      roundTab.className = `round-tab ${i === this.activeRound ? 'active' : ''}`;
+      roundTab.textContent = `Round ${i}`;
+      roundTab.dataset.round = i;
+      
+      // Add click event
+      roundTab.addEventListener('click', () => {
+        // Update active tab
+        document.querySelectorAll('.round-tab').forEach(tab => {
+          tab.classList.remove('active');
+        });
+        roundTab.classList.add('active');
+        
+        // If selecting a past round that isn't the current active one, confirm with user
+        if (i < this.bracketData.currentRound && i !== this.activeRound) {
+          this.confirmPreviousRoundEdit(i);
+        } else {
+          // Update active round normally
+          this.activeRound = parseInt(roundTab.dataset.round);
+          this.renderRoundContent(this.activeRound);
+        }
+      });
+      
+      this.roundTabs.appendChild(roundTab);
+    }
+    
+    // Render first round by default
+    this.renderRoundContent(this.activeRound);
+  }
+
+  // Add this method to your TournamentBracketMexicano class
+renderRoundContent(roundNumber) {
+  if (!this.roundContent) return;
+
+  // Clear previous content
+  this.roundContent.innerHTML = '';
+  
+  // Get matches for this round
+  const roundMatches = this.bracketData.completedMatches.filter(
+    match => match.round === roundNumber
+  );
+  
+  if (roundMatches.length === 0) {
+    this.roundContent.innerHTML = `
+      <div class="empty-section">No match data available for Round ${roundNumber}</div>
+    `;
+    return;
+  }
+  
+  // Group matches by court
+  const courtMatches = {};
+  roundMatches.forEach(match => {
+    if (!courtMatches[match.courtName]) {
+      courtMatches[match.courtName] = [];
+    }
+    courtMatches[match.courtName].push(match);
+  });
+  
+  // Create section for each court
+  Object.keys(courtMatches).forEach(courtName => {
+    const courtSection = document.createElement('div');
+    courtSection.className = 'court-section';
+    courtSection.innerHTML = `<h4>${courtName}</h4>`;
+    
+    const matchesContainer = document.createElement('div');
+    matchesContainer.className = 'matches-container';
+    
+    // Add each match
+    courtMatches[courtName].forEach(match => {
+      const team1Won = (match.score1 > match.score2);
+      const matchCard = document.createElement('div');
+      matchCard.className = 'match-card';
+      matchCard.innerHTML = `
+        <div class="team-row ${team1Won ? 'winner' : ''}">
+          <div class="team-names">${this.getTeamNames(match.team1)}</div>
+          <div class="team-score" 
+               data-match-id="${match.id}" 
+               data-score-type="score1"
+               onclick="makeScoreEditable(this, '${match.id}', 'score1')">
+            ${match.score1}
+          </div>
+        </div>
+        <div class="team-row ${!team1Won ? 'winner' : ''}">
+          <div class="team-names">${this.getTeamNames(match.team2)}</div>
+          <div class="team-score"
+               data-match-id="${match.id}" 
+               data-score-type="score2"
+               onclick="makeScoreEditable(this, '${match.id}', 'score2')">
+            ${match.score2}
+          </div>
+        </div>
+      `;
+      
+      matchesContainer.appendChild(matchCard);
+    });
+    
+    courtSection.appendChild(matchesContainer);
+    this.roundContent.appendChild(courtSection);
+  });
+}
   
   makeScoreEditable(element, matchId, scoreType) {
+    // Check if we're already editing this score
+    if (element.querySelector('.score-input')) {
+      return;
+    }
+    
+    const currentScore = element.textContent !== '-' ? element.textContent : '';
+    
+    // Create input element
     const input = document.createElement('input');
     input.type = 'number';
     input.className = 'score-input';
-    input.value = element.textContent !== '-' ? element.textContent : '';
+    input.value = currentScore;
     input.min = 0;
-
+    input.max = 10;
+  
+    // Store original text for restoration if needed
+    const originalText = element.textContent;
+    
+    // Style the parent element to indicate editing mode
+    element.classList.add('editing');
+    
+    // Add input handlers
     input.onblur = () => {
-      const score = input.value ? parseInt(input.value) : null;
-      this.updateMatchScore(matchId, scoreType, score);
-      element.textContent = score ?? '-';
+      this.handleScoreUpdate(element, input, matchId, scoreType, originalText);
     };
-
+  
     input.onkeypress = (e) => {
       if (e.key === 'Enter') {
         input.blur();
       }
     };
-
+  
+    // Clear text and add input
     element.textContent = '';
     element.appendChild(input);
     input.focus();
@@ -634,11 +858,44 @@ class TournamentBracketMexicano {
     });
   }
 
+  async handleScoreUpdate(element, input, matchId, scoreType, originalText) {
+    const score = input.value ? parseInt(input.value) : null;
+    
+    try {
+      // Update the score in the database
+      await this.updateMatchScore(matchId, scoreType, score);
+      
+      // Remove input and show updated score with visual feedback
+      element.classList.remove('editing');
+      element.classList.add('score-updated');
+      element.textContent = score ?? '-';
+      
+      // Remove the visual feedback after a short delay
+      setTimeout(() => {
+        element.classList.remove('score-updated');
+      }, 1500);
+    } catch (error) {
+      console.error('Error updating score:', error);
+      
+      // On error, restore original value
+      element.classList.remove('editing');
+      element.textContent = originalText;
+      
+      // Show error message
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to update score',
+        icon: 'error',
+        timer: 2000
+      });
+    }
+  }
+
   renderMatches() {
     if (!this.currentMatches || !this.bracketData) return;
     
     this.currentMatches.innerHTML = '';
-
+  
     this.bracketData.courts.forEach((court) => {
       court.matches.forEach((match) => {
         if (!match.completed) {
@@ -661,6 +918,22 @@ class TournamentBracketMexicano {
         }
       });
     });
+    
+    // If no matches are found, show a message
+    if (this.currentMatches.children.length === 0) {
+      this.currentMatches.innerHTML = `
+        <div class="no-matches-message">
+          <p>No active matches found for this round.</p>
+          <button class="btn-primary" id="generateRoundBtn">Generate Matches for Round ${this.bracketData.currentRound + 1}</button>
+        </div>
+      `;
+      
+      // Add event listener to the generate button
+      const generateBtn = document.getElementById('generateRoundBtn');
+      if (generateBtn) {
+        generateBtn.addEventListener('click', () => this.generateNextRound());
+      }
+    }
   }
 
   renderStandings() {

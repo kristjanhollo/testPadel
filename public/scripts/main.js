@@ -1,2 +1,4 @@
 import './services/firebase-service.js';
-import './config.js';
+
+window.IsTest = true;
+export default IsTest;

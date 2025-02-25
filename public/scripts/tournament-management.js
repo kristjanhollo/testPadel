@@ -1,6 +1,7 @@
 // Import dependencies and styles
 import '../styles/tournament-management.css';
 import firebaseService from './services/firebase-service';
+import IsTest from './main';
 
 // Tournament Manager class
 class TournamentManager {
@@ -142,6 +143,8 @@ class TournamentManager {
     }
   }
 
+  // Add these methods to your TournamentManager class
+
   async loadPlayers() {
     try {
       // Get all registered players
@@ -151,12 +154,25 @@ class TournamentManager {
       this.tournamentPlayers = await firebaseService.getTournamentPlayers(
         this.selectedTournamentId
       );
-      
-      if (window.IsTest && this.tournamentPlayers.length === 0) {
-        // For testing: auto-populate with top 16 players
-        this.tournamentPlayers = this.registeredPlayers
-          .sort((a, b) => b.ranking - a.ranking)
-          .slice(0, 16);
+      console.log(IsTest);
+      // For testing: quick load 16 random players if IsTest is true and no players are loaded yet
+      if (IsTest === true && this.tournamentPlayers.length === 0) {
+        console.log("Test mode: Auto-loading 16 random players");
+        
+        // Ensure we have enough players in the database
+        if (this.registeredPlayers.length >= 16) {
+          // Shuffle the array of players to get random selection
+          const shuffledPlayers = [...this.registeredPlayers].sort(() => 0.5 - Math.random());
+          // Take the first 16 players
+          this.tournamentPlayers = shuffledPlayers.slice(0, 16);
+        } else {
+          // If not enough players, take all available and log a warning
+          console.warn(`Test mode: Only ${this.registeredPlayers.length} players available`);
+          this.tournamentPlayers = [...this.registeredPlayers];
+        }
+        
+        // Sort by ranking for better court assignments
+        this.tournamentPlayers.sort((a, b) => b.ranking - a.ranking);
         
         // Save to Firebase
         await firebaseService.updateTournamentPlayers(

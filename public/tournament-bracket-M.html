@@ -39,6 +39,16 @@
             </div>
         </div>
         
+        <div class="round-navigation-section">
+            <h3>Round Navigation</h3>
+            <div id="roundTabs" class="round-tabs">
+                <script>console.log('logging roundTabs')</script>
+                <script>console.log(document.getElementById('roundTabs'))</script>
+             </div>
+            <div class="round-navigation-help">
+                <small>Click on a previous round to view or edit its results. Note: Editing a previous round will clear all subsequent rounds.</small>
+            </div>
+        </div>
         <!-- Conflict Resolution Section -->
         <div id="conflictResolution" class="conflict-resolution" style="display: none;">
             <div class="conflict-header">
@@ -73,7 +83,10 @@
 
                 <!-- Current Round -->
                 <div class="current-round">
-                    <h3>Current Round</h3>
+                    <h3>Current Round Matches</h3>
+                    <div id="roundContent" class="round-content">
+                        <!-- This will hold the active round's content -->
+                    </div>
                     <div id="currentMatches" class="matches-grid">
                         <!-- Matches will be populated here -->
                     </div>
@@ -96,7 +109,15 @@
             <a href="tournament-management.html" class="nav-link">Tournament Management</a>
         </nav>
     </div>
-    
+    <script>
+        // Global function for score editing
+        function makeScoreEditable(element, matchId, scoreType) {
+            // This is just a bridge to the class method
+            if (window.tournamentBracket) {
+                window.tournamentBracket.makeScoreEditable(element, matchId, scoreType);
+            }
+        }
+    </script>
 
 </body>
 </html>
