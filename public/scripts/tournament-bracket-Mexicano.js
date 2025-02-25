@@ -974,9 +974,9 @@ class TournamentBracketMexicano {
     }
   } catch (error) {}}
   
-  document.addEventListener('DOMContentLoaded', () => {
-    new TournamentBracketMexicano();
-  });
+document.addEventListener('DOMContentLoaded', () => {
+  new TournamentBracketMexicano();
+});
 
 
 

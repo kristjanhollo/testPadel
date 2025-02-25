@@ -126,15 +126,6 @@ class TournamentManager {
     });
   }
 
-  updateTournamentDisplay() {
-    if (!this.tournamentData) return;
-    
-    document.getElementById('tournamentName').textContent = this.tournamentData.name;
-    document.getElementById('tournamentDate').textContent = `Date: ${this.formatDate(this.tournamentData.start_date)}`;
-    document.getElementById('tournamentLocation').textContent = `Location: ${this.tournamentData.location}`;
-    document.getElementById('tournamentFormat').textContent = `Format: ${this.tournamentData.format}`;
-  }
-  
   formatDate(dateValue) {
     if (!dateValue) return 'N/A';
     
