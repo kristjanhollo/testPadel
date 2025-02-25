@@ -3,9 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta
-            http-equiv="Cache-Control"
-            content="no-cache, no-store, must-revalidate" />
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
         <meta http-equiv="Pragma" content="no-cache" />
         <meta http-equiv="Expires" content="0" />
         <title>Padel Bandeja - Player Management</title>
@@ -14,32 +12,18 @@
             rel="stylesheet"
             href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        
         <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
-<!-- Your initialization script -->
-<script>
-  // Your Firebase configuration object
-  const firebaseConfig = {
-  apiKey: "AIzaSyA4NV5iuhVZcacUQlHU8xWB_O2F9SB8TC4",
-  authDomain: "testing-5a0bf.firebaseapp.com",
-  projectId: "testing-5a0bf",
-  storageBucket: "testing-5a0bf.firebasestorage.app",
-  messagingSenderId: "708063470209",
-  appId: "1:708063470209:web:b8226e8053ea65488a2380",
-  measurementId: "G-2TZZZTRBX3"
-};
-
-  // Initialize Firebase
-  firebase.initializeApp(firebaseConfig);
-
-  // Initialize Firestore
-  const db = firebase.firestore();
-
-console.log(db);
-
-</script>
+        <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore-compat.js"></script>
+        
+        <!-- Initialize Firebase -->
+        <script src="scripts/firebase-init.js" type="module"></script>
+        
+        <!-- Firebase Service -->
+        <script src="scripts/services/firebase-service.js" type="module"></script>
+        <scirpt src="scripts/shared-dependencies.js" type="module"></script>
+        <scirpt src="scripts/services/firebase-service.js" type="module"></script>
     </head>
     <body>
         <div class="container">
@@ -90,7 +74,7 @@ console.log(db);
             </nav>
         </div>
 
-        <script src="scripts/player-management.js"></script>
-        <script src="scripts/config.js"></script>
+        <script src="scripts/config.js" type="module"></script>
+        <script src="scripts/player-management.js" type="module"></script>
     </body>
 </html>

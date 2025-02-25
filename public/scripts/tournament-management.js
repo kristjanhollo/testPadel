@@ -1,63 +1,184 @@
-// Constants
-const COURT_ORDER = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+// Import dependencies and styles
+import '../styles/tournament-management.css';
+import firebaseService from './services/firebase-service';
 
+// Tournament Manager class
 class TournamentManager {
   constructor() {
+    // State variables
     this.assignedPlayers = new Set();
     this.tournamentPlayers = [];
     this.registeredPlayers = [];
     this.selectedTournamentId = localStorage.getItem('selectedTournament');
     this.tournamentData = null;
+    this.unsubscribeFunctions = []; // Store Firebase listener unsubscribe functions
 
+    // Constants
+    this.COURT_ORDER = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+
+    // Initialize the application
     this.init();
   }
 
   async init() {
-    this.tournamentData = await this.fetchTournamentData();
-    if (!this.tournamentData) return;
+    if (!window.firebaseService) {
+      console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
+      return;
+    }
 
-    this.initializeCourts();
-    await this.loadPlayers();
-    this.initializeControls();
-    this.initializeDragAndDrop();
-    this.initializeSearchFunctionality();
-    this.updateTournamentDisplay();
-  }
+    // Show loading indicator
+    Swal.fire({
+      title: 'Loading tournament data...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
 
-  async fetchTournamentData() {
     try {
-      const response = await fetch(
-        `${window.config.API_URL}/tournaments/${this.selectedTournamentId}`
-      );
-      if (!response.ok) throw new Error('Failed to fetch tournament data');
-      return await response.json();
+      // Setup realtime listeners for tournament data
+      this.setupTournamentListener();
+      
+      // Wait for initial tournament data to be loaded
+      await this.waitForTournamentData();
+      
+      Swal.close();
+      
+      this.initializeCourts();
+      await this.loadPlayers();
+      this.initializeControls();
+      this.initializeDragAndDrop();
+      this.initializeSearchFunctionality();
+      this.updateTournamentDisplay();
     } catch (error) {
-      console.error('Error fetching tournament data:', error);
-      return null;
+      Swal.close();
+      console.error('Error initializing tournament management:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load tournament data. Please try again later.',
+        icon: 'error',
+        confirmButtonText: 'Go Back to List',
+      }).then(() => {
+        window.location.href = 'tournament-list.html';
+      });
     }
   }
 
+  setupTournamentListener() {
+    // Listen for tournament data changes
+    const unsubscribeTournament = firebaseService.listenToTournament(
+      this.selectedTournamentId,
+      (tournamentData) => {
+        if (tournamentData) {
+          this.tournamentData = tournamentData;
+          this.updateTournamentDisplay();
+        } else {
+          console.error('Tournament not found');
+          Swal.fire({
+            title: 'Tournament Not Found',
+            text: 'The requested tournament could not be found.',
+            icon: 'error',
+            confirmButtonText: 'Go Back to List',
+          }).then(() => {
+            window.location.href = 'tournament-list.html';
+          });
+        }
+      }
+    );
+    
+    // Listen for tournament players changes
+    const unsubscribePlayers = firebaseService.listenToTournamentPlayers(
+      this.selectedTournamentId,
+      (players) => {
+        this.tournamentPlayers = players;
+        this.initializePlayers();
+      }
+    );
+    
+    this.unsubscribeFunctions.push(unsubscribeTournament, unsubscribePlayers);
+  }
+
+  // Wait for tournament data to be loaded
+  waitForTournamentData() {
+    return new Promise((resolve) => {
+      // Check if data is already loaded
+      if (this.tournamentData) {
+        resolve();
+        return;
+      }
+      
+      // Set up a temporary listener
+      const checkInterval = setInterval(() => {
+        if (this.tournamentData) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!this.tournamentData) {
+          console.error('Timeout waiting for tournament data');
+          resolve(); // Resolve anyway to continue flow
+        }
+      }, 10000);
+    });
+  }
+
   updateTournamentDisplay() {
+    if (!this.tournamentData) return;
+    
     document.getElementById('tournamentName').textContent = this.tournamentData.name;
-    document.getElementById('tournamentDate').textContent = `Date: ${this.tournamentData.start_date}`;
+    document.getElementById('tournamentDate').textContent = `Date: ${this.formatDate(this.tournamentData.start_date)}`;
     document.getElementById('tournamentLocation').textContent = `Location: ${this.tournamentData.location}`;
     document.getElementById('tournamentFormat').textContent = `Format: ${this.tournamentData.format}`;
+  }
+  
+  formatDate(dateValue) {
+    if (!dateValue) return 'N/A';
+    
+    try {
+      // Handle Firestore timestamp
+      if (dateValue.toDate) {
+        return dateValue.toDate().toLocaleDateString();
+      }
+      
+      // Handle string date
+      return new Date(dateValue).toLocaleDateString();
+    } catch (e) {
+      return dateValue;
+    }
   }
 
   async loadPlayers() {
     try {
-      const response = await fetch(`${window.config.API_URL}/players`);
-      if (!response.ok) throw new Error('Failed to load players');
+      // Get all registered players
+      this.registeredPlayers = await firebaseService.getAllPlayers();
       
-      this.tournamentPlayers = await response.json();
-      if (window.IsTest) {
-        this.registeredPlayers = this.tournamentPlayers.slice(0, 16);
+      // Get tournament players
+      this.tournamentPlayers = await firebaseService.getTournamentPlayers(
+        this.selectedTournamentId
+      );
+      
+      if (window.IsTest && this.tournamentPlayers.length === 0) {
+        // For testing: auto-populate with top 16 players
+        this.tournamentPlayers = this.registeredPlayers
+          .sort((a, b) => b.ranking - a.ranking)
+          .slice(0, 16);
+        
+        // Save to Firebase
+        await firebaseService.updateTournamentPlayers(
+          this.selectedTournamentId,
+          this.tournamentPlayers
+        );
       }
       
       this.initializePlayers();
       this.autoAssignTopPlayers();
     } catch (error) {
       console.error('Error loading players:', error);
+      Swal.fire('Error', 'Failed to load players', 'error');
     }
   }
 
@@ -70,7 +191,7 @@ class TournamentManager {
       resultsContainer.innerHTML = '';
 
       if (query) {
-        const filteredPlayers = this.tournamentPlayers.filter(player => 
+        const filteredPlayers = this.registeredPlayers.filter(player => 
           player.name && player.name.toLowerCase().includes(query)
         );
 
@@ -90,19 +211,31 @@ class TournamentManager {
     });
   }
 
-  addToSelected(player) {
-    if (!this.registeredPlayers.includes(player)) {
-      this.registeredPlayers.push(player);
+  async addToSelected(player) {
+    if (!this.tournamentPlayers.some(p => p.id === player.id)) {
+      this.tournamentPlayers.push(player);
+      
+      // Update in Firebase
+      await firebaseService.updateTournamentPlayers(
+        this.selectedTournamentId,
+        this.tournamentPlayers
+      );
+      
       document.getElementById('searchInput').value = '';
       document.getElementById('resultsContainer').innerHTML = '';
+      
+      this.initializePlayers();
       this.autoAssignTopPlayers();
     }
   }
 
   initializePlayers() {
     const playersList = document.getElementById('playersList');
+    if (!playersList) return;
+    
     playersList.innerHTML = '';
-    this.registeredPlayers.forEach(player => {
+    
+    this.tournamentPlayers.forEach(player => {
       const playerCard = this.createPlayerCard(player);
       playersList.appendChild(playerCard);
     });
@@ -157,11 +290,11 @@ class TournamentManager {
   }
 
   autoAssignTopPlayers() {
-    if (window.IsTest) {
-      this.registeredPlayers = this.tournamentPlayers.slice(0, 16);
+    if (window.IsTest && this.tournamentPlayers.length === 0) {
+      this.tournamentPlayers = this.registeredPlayers.slice(0, 16);
     }
 
-    const topPlayers = [...this.registeredPlayers]
+    const topPlayers = [...this.tournamentPlayers]
       .sort((a, b) => b.ranking - a.ranking)
       .slice(0, 16);
 
@@ -189,7 +322,7 @@ class TournamentManager {
     const courtsGrid = document.getElementById('courtsGrid');
     courtsGrid.innerHTML = '';
 
-    COURT_ORDER.forEach((courtName, index) => {
+    this.COURT_ORDER.forEach((courtName, index) => {
       const courtId = `court-${index + 1}`;
       courtsGrid.appendChild(this.createCourtCard(courtId, courtName));
     });
@@ -239,39 +372,132 @@ class TournamentManager {
       return;
     }
 
-    const bracketData = {
-      tournamentId: this.selectedTournamentId,
-      format: this.tournamentData.format,
-      currentRound: 1,
-      courts: COURT_ORDER.map(courtName => ({
-        name: courtName,
-        matches: [],
-      })),
-      completedMatches: [],
-      standings: this.tournamentPlayers.slice(0, 16).map(player => ({
-        id: player.id,
-        name: player.name,
-        points: 0,
-        wins: 0,
-        losses: 0,
-        gamesPlayed: 0,
-        rating: player.ranking,
-      })),
-    };
+    try {
+      // Show loading
+      Swal.fire({
+        title: 'Creating first round...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Get court assignments from UI
+      const courtAssignments = this.getCourtAssignmentsFromUI();
+      
+      // Validate courts are filled
+      if (!this.validateCourtAssignments(courtAssignments)) {
+        Swal.close();
+        Swal.fire({
+          title: 'Incomplete Courts',
+          text: 'Please assign players to all courts before creating the first round.',
+          icon: 'warning'
+        });
+        return;
+      }
+      
+      // Create bracket data
+      const bracketData = {
+        tournamentId: this.selectedTournamentId,
+        format: this.tournamentData.format,
+        currentRound: 1,
+        courts: this.COURT_ORDER.map((courtName, index) => {
+          const courtId = `court-${index + 1}`;
+          const courtPlayers = this.getPlayersForCourt(courtId);
+          
+          return {
+            name: courtName,
+            matches: [{
+              id: `match-${Date.now()}-${index}`,
+              team1: [courtPlayers[0], courtPlayers[1]],
+              team2: [courtPlayers[2], courtPlayers[3]],
+              score1: null,
+              score2: null,
+              completed: false,
+              round: 1,
+              courtName
+            }]
+          };
+        }),
+        completedMatches: [],
+        standings: this.tournamentPlayers.slice(0, 16).map(player => ({
+          id: player.id,
+          name: player.name,
+          points: 0,
+          wins: 0,
+          losses: 0,
+          gamesPlayed: 0,
+          rating: player.ranking,
+        })),
+      };
 
-    localStorage.setItem(
-      `tournament_${this.selectedTournamentId}_bracket`,
-      JSON.stringify(bracketData)
-    );
+      // Save to Firebase
+      await firebaseService.saveTournamentBracket(
+        this.selectedTournamentId,
+        bracketData
+      );
 
-    localStorage.setItem(
-      `tournament_${this.selectedTournamentId}_players`,
-      JSON.stringify(this.tournamentPlayers.slice(0, 16))
-    );
+      // Update tournament status to ongoing
+      await firebaseService.updateTournament(
+        this.selectedTournamentId,
+        { status_id: 2 } // 2 = ongoing
+      );
+      
+      Swal.close();
+      
+      // Navigate to appropriate bracket view
+      window.location.href = this.tournamentData.format === 'Americano' 
+        ? 'tournament-bracket.html' 
+        : 'tournament-bracket-M.html';
+        
+    } catch (error) {
+      Swal.close();
+      console.error('Error creating first round:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to create the first round. Please try again.',
+        icon: 'error'
+      });
+    }
+  }
 
-    window.location.href = this.tournamentData.format === 'Americano' 
-      ? 'tournament-bracket.html' 
-      : 'tournament-bracket-M.html';
+  getCourtAssignmentsFromUI() {
+    const assignments = {};
+    
+    this.COURT_ORDER.forEach((courtName, index) => {
+      const courtId = `court-${index + 1}`;
+      assignments[courtId] = this.getPlayersForCourt(courtId);
+    });
+    
+    return assignments;
+  }
+  
+  getPlayersForCourt(courtId) {
+    const slots = document.querySelectorAll(`.player-slot[data-court="${courtId}"]`);
+    const players = [];
+    
+    slots.forEach(slot => {
+      const playerCard = slot.querySelector('.player-card');
+      if (playerCard) {
+        try {
+          const player = JSON.parse(playerCard.dataset.player);
+          players.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      }
+    });
+    
+    return players;
+  }
+  
+  validateCourtAssignments(assignments) {
+    for (const courtId in assignments) {
+      if (assignments[courtId].length !== 4) {
+        return false;
+      }
+    }
+    return true;
   }
 
   resetAssignments() {
@@ -306,20 +532,30 @@ class TournamentManager {
     Swal.fire('Reset!', 'All assignments have been reset.', 'success');
   }
 
-  removePlayer(playerId, playerName) {
-    Swal.fire({
+  async removePlayer(playerId, playerName) {
+    const result = await Swal.fire({
       title: 'Remove Player?',
       text: `Are you sure you want to remove ${playerName}?`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Yes, remove',
       cancelButtonText: 'Cancel',
-    }).then((result) => {
-      if (result.isConfirmed) {
-
-        this.registeredPlayers = this.registeredPlayers.filter(p => p.id !== playerId);
+    });
+    
+    if (result.isConfirmed) {
+      try {
+        // Remove from tournament players
+        this.tournamentPlayers = this.tournamentPlayers.filter(p => p.id !== playerId);
         
+        // Update in Firebase
+        await firebaseService.updateTournamentPlayers(
+          this.selectedTournamentId,
+          this.tournamentPlayers
+        );
+        
+        // Remove from UI
         document.getElementById(playerId)?.remove();
+        
         // Remove from any court slot
         const slotCard = document.getElementById(`slot-${playerId}`);
         if (slotCard) {
@@ -328,9 +564,13 @@ class TournamentManager {
           slot.innerHTML = '<span>Drop Player Here</span>';
           slot.classList.remove('filled');
         }
+        
         Swal.fire('Removed!', `${playerName} has been removed.`, 'success');
+      } catch (error) {
+        console.error('Error removing player:', error);
+        Swal.fire('Error', `Could not remove ${playerName}. Please try again.`, 'error');
       }
-    });
+    }
   }
 
   initializeDragAndDrop() {
@@ -378,7 +618,7 @@ class TournamentManager {
 
   handleSlotDrop(slot, playerData) {
     if (this.assignedPlayers.has(playerData.id)) {
-      alert('This player is already assigned to a team');
+      Swal.fire('Already Assigned', 'This player is already assigned to a team', 'warning');
       return;
     }
 
@@ -402,9 +642,29 @@ class TournamentManager {
       playerCard.classList.toggle('assigned', isAssigned);
     }
   }
+  
+  // Cleanup listeners when page unloads
+  cleanup() {
+    this.unsubscribeFunctions.forEach(unsubscribe => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    });
+  }
 }
 
-// Initialize the application
+// Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  new TournamentManager();
+  const manager = new TournamentManager();
+  
+  // Clean up listeners when page is unloaded
+  window.addEventListener('beforeunload', () => {
+    manager.cleanup();
+  });
+  
+  // Make manager available globally for debugging
+  window.tournamentManager = manager;
 });
+
+// Export the class for module usage
+export default TournamentManager;

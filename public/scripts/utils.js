@@ -104,14 +104,14 @@ export const ValidationUtils = {
   },
 
   hasValidFormat(format) {
-    return ["Mexicano", "Americano"].includes(format);
+    return ['Mexicano', 'Americano'].includes(format);
   },
 };
 
 export const ConflictUtils = {
     
   calculateCourtAssignments(players, playerAssignments) {
-    const COURT_ORDER = ["Padel Arenas", "Coolbet", "Lux Express", "3p Logistics"];
+    const COURT_ORDER = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
     const assignments = new Map();
     COURT_ORDER.forEach((court) => {
       assignments.set(

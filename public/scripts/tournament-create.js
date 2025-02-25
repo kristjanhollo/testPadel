@@ -27,6 +27,12 @@ class TournamentCreator {
   }
 
   init() {
+    // Check if Firebase service is available
+    if (!window.firebaseService) {
+      console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
+      return;
+    }
+    
     this.setMinDate();
     this.setupEventListeners();
     this.addInitialCourt();
@@ -96,47 +102,81 @@ class TournamentCreator {
   async handleSubmit(e) {
     e.preventDefault();
     
-    const courts = Array.from(
-      this.courtsContainer.getElementsByClassName('court-input')
-    ).map(courtDiv => courtDiv.querySelector('input').value);
-
-    if (!courts.length) {
-      this.showError('At least one court is required');
-      return;
-    }
-
-    const tournamentData = {
-      name: document.getElementById('name').value,
-      start_date: this.dateInput.value,
-      location: document.getElementById('location').value,
-      format: this.formatSelect.value,
-      participants: parseInt(this.maxParticipantsInput.value, 10),
-      courts,
-      status_id: 1
-    };
-
     try {
-      const response = await this.createTournament(tournamentData);
-      this.handleSuccessfulCreation(response);
+      // Show loading indicator
+      Swal.fire({
+        title: 'Creating tournament...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Collect courts data
+      const courts = Array.from(
+        this.courtsContainer.getElementsByClassName('court-input')
+      ).map(courtDiv => courtDiv.querySelector('input').value);
+
+      if (!courts.length) {
+        Swal.close();
+        this.showError('At least one court is required');
+        return;
+      }
+
+      const tournamentData = {
+        name: document.getElementById('name').value,
+        start_date: this.dateInput.value,
+        location: document.getElementById('location').value,
+        format: this.formatSelect.value,
+        participants: parseInt(this.maxParticipantsInput.value, 10),
+        courts,
+        status_id: 1 // 1 = upcoming
+      };
+
+      // Create tournament in Firebase
+      const tournament = await window.firebaseService.createTournament(tournamentData);
+      
+      // Initialize empty bracket data for the tournament format
+      await this.initializeTournamentBracket(tournament.id, tournamentData.format);
+      
+      // Initialize empty players list
+      await window.firebaseService.updateTournamentPlayers(tournament.id, []);
+      
+      Swal.close();
+      
+      // Success message
+      await Swal.fire({
+        title: 'Success!',
+        text: 'Tournament created successfully!',
+        icon: 'success',
+        timer: 1500
+      });
+      
+      // Navigate to tournament management
+      localStorage.setItem('selectedTournament', tournament.id);
+      window.location.href = 'tournament-management.html';
+      
     } catch (error) {
-      this.handleError(error);
+      Swal.close();
+      console.error('Error creating tournament:', error);
+      this.showError('Failed to create tournament. Please try again.');
     }
   }
-
-  async createTournament(data) {
-    const response = await fetch(`${window.config.API_URL}/tournaments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) throw new Error('Failed to create tournament');
-    return response.json();
-  }
-
-  handleSuccessfulCreation(tournament) {
-    localStorage.setItem('selectedTournament', tournament.id);
-    window.location.href = 'tournament-management.html';
+  
+  async initializeTournamentBracket(tournamentId, format) {
+    // Create initial bracket structure based on format
+    const bracketData = {
+      format: format,
+      currentRound: 0,
+      courts: DEFAULT_COURTS.map(courtName => ({
+        name: courtName,
+        matches: [],
+      })),
+      completedMatches: [],
+      standings: []
+    };
+    
+    await window.firebaseService.saveTournamentBracket(tournamentId, bracketData);
   }
 
   handleFormatChange() {
@@ -215,13 +255,12 @@ class TournamentCreator {
     this.handleFormatChange();
   }
 
-  handleError(error) {
-    console.error('Error creating tournament:', error);
-    alert('Failed to create tournament. Please try again.');
-  }
-
   showError(message) {
-    alert(message);
+    Swal.fire({
+      title: 'Error',
+      text: message,
+      icon: 'error'
+    });
   }
 
   validateParticipants() {

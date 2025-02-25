@@ -1,11 +1,11 @@
-import pg from "pg";
+import pg from 'pg';
 const { Pool } = pg;
 
 const pool = new Pool({
-  user: "padel_user",
-  host: "padel_postgres",
-  database: "padel_db",
-  password: "padel_pass",
+  user: 'padel_user',
+  host: 'padel_postgres',
+  database: 'padel_db',
+  password: 'padel_pass',
   port: 5432,
 });
 

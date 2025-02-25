@@ -1,97 +1,97 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const rankingsList = document.getElementById('rankingsList');
-    const searchInput = document.getElementById('playerSearch');
-    const filterButtons = document.querySelectorAll('.filter-btn');
+  const rankingsList = document.getElementById('rankingsList');
+  const searchInput = document.getElementById('playerSearch');
+  const filterButtons = document.querySelectorAll('.filter-btn');
     
-    let players = [];
-    let currentFilter = 'rating';
+  let players = [];
+  let currentFilter = 'rating';
 
-    function loadPlayers() {
-        // Load all players
-        players = JSON.parse(localStorage.getItem('players') || '[]');
+  function loadPlayers() {
+    // Load all players
+    players = JSON.parse(localStorage.getItem('players') || '[]');
         
-        // Initialize ratings if not exists
-        players.forEach(player => {
-            if (!player.rating) {
-                player.rating = 2.0; // Default starting rating
-            }
-            // Ensure rating is within 0-7 range
-            player.rating = Math.max(0, Math.min(7, player.rating));
-        });
+    // Initialize ratings if not exists
+    players.forEach(player => {
+      if (!player.rating) {
+        player.rating = 2.0; // Default starting rating
+      }
+      // Ensure rating is within 0-7 range
+      player.rating = Math.max(0, Math.min(7, player.rating));
+    });
 
-        // Calculate additional stats for each player
-        players = players.map(player => ({
-            ...player,
-            ...calculatePlayerStats(player)
-        }));
+    // Calculate additional stats for each player
+    players = players.map(player => ({
+      ...player,
+      ...calculatePlayerStats(player)
+    }));
 
-        updateRankings();
-    }
+    updateRankings();
+  }
 
-    function calculatePlayerStats(player) {
-        const tournaments = JSON.parse(localStorage.getItem('tournaments') || '[]');
-        let wins = 0;
-        let totalMatches = 0;
-        let tournamentsPlayed = new Set();
+  function calculatePlayerStats(player) {
+    const tournaments = JSON.parse(localStorage.getItem('tournaments') || '[]');
+    let wins = 0;
+    let totalMatches = 0;
+    let tournamentsPlayed = new Set();
 
-        tournaments.forEach(tournament => {
-            const bracket = JSON.parse(localStorage.getItem(`tournament_${tournament.id}_bracket`) || 'null');
-            if (!bracket) return;
+    tournaments.forEach(tournament => {
+      const bracket = JSON.parse(localStorage.getItem(`tournament_${tournament.id}_bracket`) || 'null');
+      if (!bracket) return;
 
-            bracket.rounds.forEach(round => {
-                round.matches.forEach(match => {
-                    if (match.status === 'completed') {
-                        const playerInTeam1 = match.team1?.players.some(p => p.id === player.id);
-                        const playerInTeam2 = match.team2?.players.some(p => p.id === player.id);
+      bracket.rounds.forEach(round => {
+        round.matches.forEach(match => {
+          if (match.status === 'completed') {
+            const playerInTeam1 = match.team1?.players.some(p => p.id === player.id);
+            const playerInTeam2 = match.team2?.players.some(p => p.id === player.id);
 
-                        if (playerInTeam1 || playerInTeam2) {
-                            tournamentsPlayed.add(tournament.id);
-                            totalMatches++;
-                            if ((playerInTeam1 && match.winner === 'team1') || 
+            if (playerInTeam1 || playerInTeam2) {
+              tournamentsPlayed.add(tournament.id);
+              totalMatches++;
+              if ((playerInTeam1 && match.winner === 'team1') || 
                                 (playerInTeam2 && match.winner === 'team2')) {
-                                wins++;
-                            }
-                        }
-                    }
-                });
-            });
+                wins++;
+              }
+            }
+          }
         });
+      });
+    });
 
-        return {
-            wins,
-            totalMatches,
-            winRate: totalMatches > 0 ? (wins / totalMatches * 100).toFixed(1) : 0,
-            tournamentsCount: tournamentsPlayed.size
-        };
+    return {
+      wins,
+      totalMatches,
+      winRate: totalMatches > 0 ? (wins / totalMatches * 100).toFixed(1) : 0,
+      tournamentsCount: tournamentsPlayed.size
+    };
+  }
+
+  function updateRankings(searchTerm = '') {
+    let filteredPlayers = [...players];
+
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filteredPlayers = filteredPlayers.filter(player =>
+        player.name.toLowerCase().includes(term)
+      );
     }
 
-    function updateRankings(searchTerm = '') {
-        let filteredPlayers = [...players];
+    // Apply sorting based on current filter
+    filteredPlayers.sort((a, b) => {
+      switch (currentFilter) {
+      case 'rating':
+        return b.rating - a.rating;
+      case 'wins':
+        return b.wins - a.wins;
+      case 'tournaments':
+        return b.tournamentsCount - a.tournamentsCount;
+      default:
+        return b.rating - a.rating;
+      }
+    });
 
-        // Apply search filter
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filteredPlayers = filteredPlayers.filter(player =>
-                player.name.toLowerCase().includes(term)
-            );
-        }
-
-        // Apply sorting based on current filter
-        filteredPlayers.sort((a, b) => {
-            switch (currentFilter) {
-                case 'rating':
-                    return b.rating - a.rating;
-                case 'wins':
-                    return b.wins - a.wins;
-                case 'tournaments':
-                    return b.tournamentsCount - a.tournamentsCount;
-                default:
-                    return b.rating - a.rating;
-            }
-        });
-
-        // Render rankings
-        rankingsList.innerHTML = filteredPlayers.map((player, index) => `
+    // Render rankings
+    rankingsList.innerHTML = filteredPlayers.map((player, index) => `
             <div class="ranking-item" onclick="window.location.href='player-profile.html?id=${player.id}'">
                 <div class="rank-col">#${index + 1}</div>
                 <div class="player-col">
@@ -106,36 +106,36 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `).join('');
 
-        // If no players found
-        if (filteredPlayers.length === 0) {
-            rankingsList.innerHTML = `
+    // If no players found
+    if (filteredPlayers.length === 0) {
+      rankingsList.innerHTML = `
                 <div class="ranking-item" style="text-align: center; color: #64748b;">
                     No players found
                 </div>
             `;
-        }
     }
+  }
 
-    // Event Listeners
-    searchInput.addEventListener('input', (e) => {
-        updateRankings(e.target.value);
-    });
+  // Event Listeners
+  searchInput.addEventListener('input', (e) => {
+    updateRankings(e.target.value);
+  });
 
-    filterButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Update active state
-            filterButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Update active state
+      filterButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
             
-            // Apply filter
-            currentFilter = btn.dataset.filter;
-            updateRankings(searchInput.value);
-        });
+      // Apply filter
+      currentFilter = btn.dataset.filter;
+      updateRankings(searchInput.value);
     });
+  });
 
-    // Initialize
-    loadPlayers();
+  // Initialize
+  loadPlayers();
 
-    // Update rankings every minute to reflect any changes
-    setInterval(loadPlayers, 60000);
+  // Update rankings every minute to reflect any changes
+  setInterval(loadPlayers, 60000);
 });

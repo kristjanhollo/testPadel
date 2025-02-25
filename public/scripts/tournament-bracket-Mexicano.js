@@ -1,843 +1,977 @@
+// Import dependencies and styles
+import '../styles/tournament-bracket-Mexicano.css';
+import firebaseService from './services/firebase-service';
+
+// Import utility modules
 import {
   ValidationUtils,
   PlayerSortUtils,
   ConflictUtils,
   GameScoreUtils,
-} from "./utils.js";
+} from './utils.js';
 
-document.addEventListener("DOMContentLoaded", () => {
-  // DOM Elements
-
-  loadTournamentData();
-});
-
-const timerDisplay = document.getElementById("gameTimer");
-const generateBtn = document.getElementById("generateBracket");
-const startTimerBtn = document.getElementById("startTimer");
-const resetRoundBtn = document.getElementById("resetRound");
-const playerCountEl = document.getElementById("playerCount");
-const roundCountEl = document.getElementById("roundCount");
-const currentMatches = document.getElementById("currentMatches");
-const standings = document.getElementById("standings");
-const registeredPlayersContainer = document.getElementById("registeredPlayers");
-const playersGrid = registeredPlayersContainer.querySelector(".players-grid");
-const selectedTournamentId = localStorage.getItem("selectedTournament");
-
-let tournamentPlayers = JSON.parse(
-  localStorage.getItem(`tournament_${selectedTournamentId}_players`) || "[]"
-);
-//
-let tournament = null;
-let players = [];
-let bracketData = null;
-let unassignedPlayers = [];
-let incompleteCourts = [];
-let playerAssignments = new Map();
-const COURT_ORDER = ["Padel Arenas", "Coolbet", "Lux Express", "3p Logistics"];
-
-players = tournamentPlayers;
-loadPlayers();
-
-async function fetchTournamentData(tournamentId) {
-  try {
-    const response = await fetch(
-      `${window.config.API_URL}/tournaments/${tournamentId}`
-    );
-    if (!response.ok) {
-      throw new Error("Failed to fetch tournament data");
+/**
+ * Tournament Bracket Mexicano class
+ * Manages the Mexicano format tournament bracket display and interactions
+ */
+class TournamentBracketMexicano {
+  constructor() {
+    // DOM Elements
+    this.timerDisplay = document.getElementById('gameTimer');
+    this.generateBtn = document.getElementById('generateBracket');
+    this.startTimerBtn = document.getElementById('startTimer');
+    this.resetRoundBtn = document.getElementById('resetRound');
+    this.playerCountEl = document.getElementById('playerCount');
+    this.roundCountEl = document.getElementById('roundCount');
+    this.currentMatches = document.getElementById('currentMatches');
+    this.standings = document.getElementById('standings');
+    this.registeredPlayersContainer = document.getElementById('registeredPlayers');
+    this.playersGrid = this.registeredPlayersContainer?.querySelector('.players-grid');
+    
+    // State
+    this.selectedTournamentId = localStorage.getItem('selectedTournament');
+    this.tournament = null;
+    this.players = [];
+    this.bracketData = null;
+    this.unassignedPlayers = [];
+    this.incompleteCourts = [];
+    this.playerAssignments = new Map();
+    this.unsubscribeFunctions = [];
+    
+    // Constants
+    this.COURT_ORDER = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+    
+    // Initialize game timer
+    this.gameTimer = this.createGameTimer();
+    
+    // Initialize the bracket
+    this.init();
+  }
+  
+  async init() {
+    if (!firebaseService) {
+      console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
+      return;
     }
-
-    return await response.json();
-  } catch (error) {
-    console.error("Error fetching tournament data:", error);
-    return null;
-  }
-}
-bracketData = JSON.parse(
-  localStorage.getItem(`tournament_${selectedTournamentId}_bracket`) || "null"
-);
-roundCountEl.textContent = `Round ${bracketData.currentRound}/4`;
-async function loadTournamentData() {
-  const selectedTournamentId = localStorage.getItem("selectedTournament");
-  if (!selectedTournamentId) {
-    window.location.href = "tournament-list.html";
-    return;
-  }
-
-  tournament = await fetchTournamentData(selectedTournamentId);
-
-  if (!tournament) {
-    handleDataError();
-    return;
-  }
-
-  renderMatches();
-  renderStandings();
-  renderRegisteredPlayers();
-  renderGameScores();
-}
-
-function renderRegisteredPlayers() {
-  playersGrid.innerHTML = "";
-
-  const sortedPlayers = [...players].sort((a, b) => b.ranking - a.ranking);
-  const numColumns = 4;
-  const numRows = Math.ceil(players.length / numColumns);
-
-  const columns = Array.from({ length: numColumns }, () => []);
-
-  sortedPlayers.forEach((player, index) => {
-    const columnIndex = Math.floor(index / numRows);
-    columns[columnIndex].push(player);
-  });
-
-  columns.forEach((column) => {
-    const columnDiv = document.createElement("div");
-    columnDiv.className = "player-column";
-
-    column.forEach((player) => {
-      const playerCard = document.createElement("div");
-      playerCard.className = "player-card";
-      playerCard.innerHTML = `
-              <div class="player-info">
-                  <span class="player-name">${player.name}</span>
-                  <span class="player-rating">${player.ranking || 0}</span>
-              </div>
-          `;
-      columnDiv.appendChild(playerCard);
-    });
-
-    playersGrid.appendChild(columnDiv);
-  });
-}
-
-// Helper Functions
-function getTeamNames(team) {
-  return team.map((player) => player.name).join(" & ");
-}
-
-function generateNextRound() {
-  if (!ValidationUtils.canStartNewRound(bracketData)) {
+    
+    try {
+      // Show loading
       Swal.fire({
-          title: "Cannot Start New Round",
-          text: "Previous round incomplete!",
-          icon: "warning",
-          confirmButtonText: "OK"
+        title: 'Loading tournament data...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Set up listeners for data changes
+      this.setupDataListeners();
+      
+      // Wait for initial data
+      await this.waitForData();
+      
+      Swal.close();
+      
+      // Render initial state
+      this.updateDisplay();
+      
+      // Set up event listeners
+      this.setupEventListeners();
+    } catch (error) {
+      Swal.close();
+      console.error('Error initializing tournament bracket:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load tournament data. Please try again later.',
+        icon: 'error',
+        confirmButtonText: 'Go Back to List',
+      }).then(() => {
+        window.location.href = 'tournament-list.html';
+      });
+    }
+  }
+  
+  setupDataListeners() {
+    // Listen for tournament data changes
+    const unsubscribeTournament = firebaseService.listenToTournament(
+      this.selectedTournamentId,
+      (tournamentData) => {
+        if (tournamentData) {
+          this.tournament = tournamentData;
+        } else {
+          console.error('Tournament not found');
+        }
+      }
+    );
+    
+    // Listen for bracket data changes
+    const unsubscribeBracket = firebaseService.listenToTournamentBracket(
+      this.selectedTournamentId,
+      (bracketData) => {
+        if (bracketData) {
+          this.bracketData = bracketData;
+          this.updateDisplay();
+        } else {
+          console.error('Bracket data not found');
+        }
+      }
+    );
+    
+    // Listen for tournament players changes
+    const unsubscribePlayers = firebaseService.listenToTournamentPlayers(
+      this.selectedTournamentId,
+      (players) => {
+        this.players = players;
+        this.updateDisplay();
+      }
+    );
+    
+    this.unsubscribeFunctions.push(unsubscribeTournament, unsubscribeBracket, unsubscribePlayers);
+  }
+  
+  // Wait for initial data to be loaded
+  waitForData() {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (this.tournament && this.bracketData && this.players) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+      
+      // Timeout after 15 seconds
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve(); // Resolve anyway to continue flow
+      }, 15000);
+    });
+  }
+  
+  updateDisplay() {
+    if (!this.bracketData) return;
+    
+    // Update round display
+    if (this.roundCountEl) {
+      this.roundCountEl.textContent = `Round ${this.bracketData.currentRound}/4`;
+    }
+    
+    // Update player count
+    if (this.playerCountEl && this.players) {
+      this.playerCountEl.textContent = `${this.players.length} Players`;
+    }
+    
+    // Render matches
+    this.renderMatches();
+    
+    // Render standings
+    this.renderStandings();
+    
+    // Render registered players
+    this.renderRegisteredPlayers();
+    
+    // Render game scores
+    this.renderGameScores();
+    
+    // Check for completed tournament
+    this.checkRoundCompletion();
+  }
+  
+  setupEventListeners() {
+    // Generate next round button
+    if (this.generateBtn) {
+      this.generateBtn.addEventListener('click', () => this.generateNextRound());
+    }
+    
+    // Start/reset timer button
+    if (this.startTimerBtn) {
+      this.startTimerBtn.addEventListener('click', () => {
+        if (this.gameTimer.isRunning) {
+          this.gameTimer.reset();
+        } else {
+          this.gameTimer.start();
+        }
+      });
+    }
+    
+    // Reset round button
+    if (this.resetRoundBtn) {
+      this.resetRoundBtn.addEventListener('click', () => this.resetCurrentRound());
+    }
+    
+    // Set global functions for HTML event handlers
+    window.makeScoreEditable = (element, matchId, scoreType) => {
+      this.makeScoreEditable(element, matchId, scoreType);
+    };
+    
+    window.deletePlayer = (playerId) => {
+      this.deletePlayer(playerId);
+    };
+  }
+  
+  makeScoreEditable(element, matchId, scoreType) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'score-input';
+    input.value = element.textContent !== '-' ? element.textContent : '';
+    input.min = 0;
+
+    input.onblur = () => {
+      const score = input.value ? parseInt(input.value) : null;
+      this.updateMatchScore(matchId, scoreType, score);
+      element.textContent = score ?? '-';
+    };
+
+    input.onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      }
+    };
+
+    element.textContent = '';
+    element.appendChild(input);
+    input.focus();
+  }
+  
+  // Create game timer
+  createGameTimer() {
+    return {
+      time: 20 * 60,
+      isRunning: false,
+      interval: null,
+
+      start: () => {
+        if (!this.gameTimer.isRunning) {
+          this.gameTimer.isRunning = true;
+          this.startTimerBtn.textContent = 'Reset Timer';
+          this.gameTimer.interval = setInterval(() => {
+            this.gameTimer.time--;
+            this.gameTimer.updateDisplay();
+            if (this.gameTimer.time <= 0) {
+              this.gameTimer.timeUp();
+            }
+          }, 1000);
+        }
+      },
+
+      reset: () => {
+        this.gameTimer.time = 20 * 60;
+        this.gameTimer.isRunning = false;
+        this.startTimerBtn.textContent = 'Start Timer';
+        clearInterval(this.gameTimer.interval);
+        this.gameTimer.updateDisplay();
+        this.timerDisplay.classList.remove('time-up');
+      },
+
+      updateDisplay: () => {
+        const minutes = Math.floor(this.gameTimer.time / 60);
+        const seconds = this.gameTimer.time % 60;
+        this.timerDisplay.textContent = `${minutes
+          .toString()
+          .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      },
+
+      timeUp: () => {
+        clearInterval(this.gameTimer.interval);
+        this.gameTimer.isRunning = false;
+        this.startTimerBtn.textContent = 'Start Timer';
+        this.timerDisplay.classList.add('time-up');
+        Swal.fire({
+          title: 'Time\'s Up!',
+          text: 'Round time is up! Please enter final scores.',
+          icon: 'info'
+        });
+      }
+    };
+  }
+  
+  // Helper Functions
+  getTeamNames(team) {
+    return team.map((player) => player.name).join(' & ');
+  }
+
+  async generateNextRound() {
+    if (!ValidationUtils.canStartNewRound(this.bracketData)) {
+      Swal.fire({
+        title: 'Cannot Start New Round',
+        text: 'Previous round incomplete!',
+        icon: 'warning'
       });
       return;
-  }
-
-
-  bracketData.courts.forEach((court) => {
-      court.matches = [];
-  });
-
-  generateMexicanoMatches();
-  
-  roundCountEl.textContent = `Round ${bracketData.currentRound}/4`;
-  registeredPlayersContainer.style.display = "none";
-
-  renderGameScores();
-  saveBracketData();
-  renderMatches();
-  gameTimer.reset();
-}
-
-function generateFirstRound() {
-  const sortedPlayers = [...players].sort(PlayerSortUtils.byRating);
-  COURT_ORDER.forEach((courtName, index) => {
-    const courtPlayers = sortedPlayers.slice(index * 4, (index + 1) * 4);
-    if (courtPlayers.length >= 4) {
-      const team1 = [courtPlayers[0], courtPlayers[3]];
-      const team2 = [courtPlayers[1], courtPlayers[2]];
-      createMatch(courtName, team1, team2, index);
-    }
-  });
-}
-
-function generateMexicanoMatches() {
-  if (bracketData.currentRound === 0) {
-    generateFirstRound();
-  } else {
-    generateSubsequentRound();
-  }
-}
-
-function renderGameScores() {
-  // First remove existing table if any
-  const existingTable = document.querySelector(".game-score-table");
-  if (existingTable) {
-    existingTable.remove();
-  }
-
-  const gameScoreTable = document.createElement("div");
-  gameScoreTable.className = "game-score-table";
-
-  // Header
-  const header = document.createElement("h3");
-  header.textContent = "GameScore Tracking";
-  gameScoreTable.appendChild(header);
-
-  // Create scores grid
-  const scoreGrid = document.createElement("div");
-  scoreGrid.className = "score-grid";
-
-  players.forEach((player) => {
-    const matchPoints = bracketData.completedMatches
-      .filter((m) => m.round === bracketData.currentRound)
-      .find(
-        (m) =>
-          m.team1.some((p) => p.id === player.id) ||
-          m.team2.some((p) => p.id === player.id)
-      );
-
-    let gameScore = player.rating; // Base score is player's rating
-    if (matchPoints) {
-      const score = matchPoints.team1.some((p) => p.id === player.id)
-        ? matchPoints.score1
-        : matchPoints.score2;
-      gameScore = score * 100 + player.rating;
     }
 
-    const scoreRow = document.createElement("div");
-    scoreRow.className = "score-row";
-    scoreRow.innerHTML = `
-                <span class="player-name">${player.name}</span>
-                <span class="game-score">${gameScore}</span>
-            `;
-    scoreGrid.appendChild(scoreRow);
-  });
-
-  gameScoreTable.appendChild(scoreGrid);
-
-  // Add the table after standings
-  const standings = document.getElementById("standings");
-  if (standings) {
-    standings.parentNode.insertBefore(gameScoreTable, standings.nextSibling);
+    try {
+      // Show loading
+      Swal.fire({
+        title: 'Generating next round...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Clear previous matches
+      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
+      updatedBracketData.courts.forEach((court) => {
+        court.matches = [];
+      });
+      
+      // Generate matches based on format
+      await this.generateMexicanoMatches(updatedBracketData);
+      
+      // Update round
+      updatedBracketData.currentRound++;
+      
+      // Save updated bracket data
+      await firebaseService.saveTournamentBracket(
+        this.selectedTournamentId,
+        updatedBracketData
+      );
+      
+      // Hide registered players
+      if (this.registeredPlayersContainer) {
+        this.registeredPlayersContainer.style.display = 'none';
+      }
+      
+      Swal.close();
+      
+      // Reset timer
+      this.gameTimer.reset();
+    } catch (error) {
+      Swal.close();
+      console.error('Error generating next round:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to generate next round. Please try again.',
+        icon: 'error'
+      });
+    }
   }
-}
 
-function generateSubsequentRound() {
-  playerAssignments.clear();
-
-  const previousMatches = bracketData.completedMatches.filter(
-    (m) => m.round === bracketData.currentRound
-  );
-
-  console.log("--currentround--", bracketData.currentRound);
-  console.log("--previousMatches--", previousMatches);
-  console.log("--playerAssignments--", playerAssignments);
-  console.log("--bracketdate", bracketData);
-
-  previousMatches.forEach((match) => {
-    const { score1, score2, courtName, team1, team2 } = match;
-
-    if (score1 !== score2) {
-      const [winningTeam, losingTeam] =
-        score1 > score2 ? [team1, team2] : [team2, team1];
-
-      winningTeam.forEach((player) =>
-        playerAssignments.set(player.id, determineNextCourt(courtName, "win"))
-      );
-
-      losingTeam.forEach((player) =>
-        playerAssignments.set(player.id, determineNextCourt(courtName, "loss"))
-      );
+  async generateMexicanoMatches(bracketData) {
+    if (bracketData.currentRound === 0) {
+      await this.generateFirstRound(bracketData);
     } else {
-      const assignTieBreaker = (team, baseScore) => {
-        const [playerA, playerB] = team;
-        const scoreA = baseScore * 100 + playerA.rating;
-        const scoreB = baseScore * 100 + playerB.rating;
-
-        playerAssignments.set(
-          playerA.id,
-          determineNextCourt(courtName, scoreA > scoreB ? "win" : "loss")
-        );
-        playerAssignments.set(
-          playerB.id,
-          determineNextCourt(courtName, scoreA > scoreB ? "loss" : "win")
-        );
-      };
-
-      assignTieBreaker(team1, score1);
-      assignTieBreaker(team2, score2);
+      await this.generateSubsequentRound(bracketData);
     }
-  });
-  bracketData.currentRound++;
-  createMatchesForRound();
-}
+  }
 
-function determineNextCourt(currentCourt, result) {
-  const courtMovement = {
-    "Padel Arenas": {
-      win: "Padel Arenas",
-      loss: "Coolbet",
-    },
-    Coolbet: {
-      win: "Padel Arenas",
-      loss: "Lux Express",
-    },
-    "Lux Express": {
-      win: "Coolbet",
-      loss: "3p Logistics",
-    },
-    "3p Logistics": {
-      win: "Lux Express",
-      loss: "3p Logistics",
-    },
-  };
-
-  return courtMovement[currentCourt][result];
-}
-
-function createMatchesForRound() {
-  COURT_ORDER.forEach((courtName, index) => {
-    const courtPlayers = players
-      .filter((p) => playerAssignments.get(p.id) === courtName)
-      .sort((a, b) =>
-        PlayerSortUtils.byGameScore(
-          a,
-          b,
-          bracketData.completedMatches,
-          bracketData.currentRound
-        )
-      );
-
-    if (courtPlayers.length >= 4) {
-      // Create teams by GameScore: highest with lowest, second highest with second lowest
-      const team1 = [courtPlayers[0], courtPlayers[3]];
-      const team2 = [courtPlayers[1], courtPlayers[2]];
-      createMatch(courtName, team1, team2, index);
-    }
-  });
-}
-
-
-
-function showConflictResolution(courtAssignments = null) {
-  const conflictSection = document.getElementById("conflictResolution");
-  const unassignedList = document.getElementById("unassignedPlayersList");
-  const incompleteList = document.getElementById("incompleteCourtsList");
-
-  conflictSection.style.display = "block";
-  unassignedList.innerHTML = "";
-  incompleteList.innerHTML = "";
-
-  // Use provided court assignments or calculate them
-  const assignments =
-    courtAssignments ||
-    ConflictUtils.calculateCourtAssignments(players, playerAssignments);
-
-  // Find unassigned players
-  unassignedPlayers = players.filter((p) => !playerAssignments.has(p.id));
-
-  // Find incomplete courts
-  incompleteCourts = ConflictUtils.findIncompleteCourts(assignments);
-
-  // Render unassigned players
-  unassignedPlayers.forEach((player) => {
-    const playerCard = createDraggablePlayerCard(player);
-    unassignedList.appendChild(playerCard);
-  });
-
-  // Render incomplete courts
-  incompleteCourts.forEach((court) => {
-    const courtElement = createCourtElement(court);
-    incompleteList.appendChild(courtElement);
-  });
-}
-
-function createDraggablePlayerCard(player) {
-  const card = document.createElement("div");
-  card.className = "player-card draggable";
-  card.draggable = true;
-  card.dataset.playerId = player.id;
-  card.innerHTML = `
-        <div class="player-info">
-            <span class="player-name">${player.name}</span>
-            <span class="player-rating">${player.ranking}</span>
-        </div>
-    `;
-
-  card.addEventListener("dragstart", (e) => {
-    e.dataTransfer.setData("application/json", JSON.stringify(player));
-    card.classList.add("dragging");
-  });
-
-  card.addEventListener("dragend", () => {
-    card.classList.remove("dragging");
-  });
-
-  return card;
-}
-
-function createCourtElement(court) {
-  const courtEl = document.createElement("div");
-  courtEl.className = "court-container";
-  courtEl.innerHTML = `
-        <h5>${court.name}</h5>
-        <div class="current-players">
-            ${court.currentPlayers
-              .map(
-                (p) => `
-                <div class="player-card">
-                    <div class="player-info">
-                        <span class="player-name">${p.name}</span>
-                        <span class="player-rating">${p.ranking.toFixed(
-                          1
-                        )}</span>
-                    </div>
-                </div>
-            `
-              )
-              .join("")}
-        </div>
-        <div class="court-slot" data-court="${court.name}">
-            <span>Drop Player Here (${court.neededPlayers} needed)</span>
-        </div>
-    `;
-
-  setupDropZone(courtEl.querySelector(".court-slot"), court.name);
-  return courtEl;
-}
-
-function setupDropZone(element, courtName) {
-  element.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    element.classList.add("drag-over");
-  });
-
-  element.addEventListener("dragleave", () => {
-    element.classList.remove("drag-over");
-  });
-
-  element.addEventListener("drop", (e) => {
-    e.preventDefault();
-    element.classList.remove("drag-over");
-
-    const playerData = JSON.parse(e.dataTransfer.getData("application/json"));
-    handlePlayerAssignment(playerData, courtName);
-  });
-}
-
-function handlePlayerAssignment(player, courtName) {
-  playerAssignments.set(player.id, courtName);
-
-  // Check if all conflicts are resolved
-  const courtAssignments = new Map();
-  COURT_ORDER.forEach((court) => {
-    courtAssignments.set(court, []);
-  });
-
-  players.forEach((p) => {
-    const court = playerAssignments.get(p.id);
-    if (court) {
-      courtAssignments.get(court).push(p);
-    }
-  });
-
-  let hasConflicts = false;
-  courtAssignments.forEach((courtPlayers, court) => {
-    if (courtPlayers.length > 0 && courtPlayers.length !== 4) {
-      hasConflicts = true;
-    }
-  });
-
-  if (!hasConflicts) {
-    // All conflicts resolved, create matches
-    document.getElementById("conflictResolution").style.display = "none";
-    COURT_ORDER.forEach((courtName, index) => {
-      const courtPlayers = courtAssignments.get(courtName);
-      if (courtPlayers && courtPlayers.length === 4) {
-        courtPlayers.sort(PlayerSortUtils.byRating);
+  async generateFirstRound(bracketData) {
+    const sortedPlayers = [...this.players].sort(PlayerSortUtils.byRating);
+    
+    this.COURT_ORDER.forEach((courtName, index) => {
+      const courtPlayers = sortedPlayers.slice(index * 4, (index + 1) * 4);
+      if (courtPlayers.length >= 4) {
         const team1 = [courtPlayers[0], courtPlayers[3]];
         const team2 = [courtPlayers[1], courtPlayers[2]];
-        createMatch(courtName, team1, team2, index);
+        this.createMatch(bracketData, courtName, team1, team2, index);
       }
     });
-
-    roundCountEl.textContent = `Round ${bracketData.currentRound}/4`;
-    saveBracketData();
-  } else {
-    // Update conflict resolution display
-    showConflictResolution(courtAssignments);
   }
-}
+  
+  async generateSubsequentRound(bracketData) {
+    this.playerAssignments.clear();
 
-function createMatch(courtName, team1, team2, courtIndex) {
-  const match = {
-    id: `match-${Date.now()}-${courtIndex}`,
-    courtName,
-    team1,
-    team2,
-    score1: null,
-    score2: null,
-    completed: false,
-    round: bracketData.currentRound,
-  };
-  bracketData.courts[courtIndex].matches.push(match);
-}
+    const previousMatches = bracketData.completedMatches.filter(
+      (m) => m.round === bracketData.currentRound
+    );
 
-function updateMatchScore(matchId, scoreType, score) {
-  let matchUpdated = false;
+    previousMatches.forEach((match) => {
+      const { score1, score2, courtName, team1, team2 } = match;
 
-  // Find the match
-  const match = bracketData.courts
-    .flatMap((court) => court.matches)
-    .find((m) => m.id === matchId);
-  if (!match) return; // Exit if no match found
+      if (score1 !== score2) {
+        const [winningTeam, losingTeam] =
+          score1 > score2 ? [team1, team2] : [team2, team1];
 
-  const currentScore = parseInt(score, 10);
-  const otherScore = scoreType === "score1" ? match.score2 : match.score1;
+        winningTeam.forEach((player) =>
+          this.playerAssignments.set(player.id, this.determineNextCourt(courtName, 'win'))
+        );
 
-  // Validate score if both scores are set
-  if (currentScore !== null && otherScore !== null) {
-    if (!ValidationUtils.isValidScore(currentScore, otherScore)) {
-      Swal.fire("Invalid Score", "Scores must be between 0-10.", "error");
+        losingTeam.forEach((player) =>
+          this.playerAssignments.set(player.id, this.determineNextCourt(courtName, 'loss'))
+        );
+      } else {
+        const assignTieBreaker = (team, baseScore) => {
+          const [playerA, playerB] = team;
+          const scoreA = baseScore * 100 + playerA.rating;
+          const scoreB = baseScore * 100 + playerB.rating;
+
+          this.playerAssignments.set(
+            playerA.id,
+            this.determineNextCourt(courtName, scoreA > scoreB ? 'win' : 'loss')
+          );
+          this.playerAssignments.set(
+            playerB.id,
+            this.determineNextCourt(courtName, scoreA > scoreB ? 'loss' : 'win')
+          );
+        };
+
+        assignTieBreaker(team1, score1);
+        assignTieBreaker(team2, score2);
+      }
+    });
+    
+    if (this.hasUnassignedPlayers()) {
+      return this.handleConflictResolution(bracketData);
+    } else {
+      return this.createMatchesForRound(bracketData);
+    }
+  }
+  
+  hasUnassignedPlayers() {
+    return this.players.some(p => !this.playerAssignments.has(p.id));
+  }
+  
+  async handleConflictResolution(bracketData) {
+    // This function would handle conflict resolution UI
+    // For simplicity, we'll just auto-assign unassigned players
+    const unassignedPlayers = this.players.filter(p => !this.playerAssignments.has(p.id));
+    
+    // Distribute unassigned players to courts that need players
+    const courtNeeds = new Map();
+    this.COURT_ORDER.forEach(court => {
+      const assigned = this.players.filter(p => this.playerAssignments.get(p.id) === court);
+      const needed = 4 - assigned.length;
+      if (needed > 0) {
+        courtNeeds.set(court, needed);
+      }
+    });
+    
+    // Sort courts by need
+    const sortedCourts = [...courtNeeds.entries()].sort((a, b) => b[1] - a[1]);
+    
+    // Assign players to courts
+    unassignedPlayers.forEach(player => {
+      if (sortedCourts.length > 0) {
+        const [court, needed] = sortedCourts[0];
+        this.playerAssignments.set(player.id, court);
+        
+        if (needed === 1) {
+          sortedCourts.shift(); // Remove this court from the list
+        } else {
+          sortedCourts[0][1] = needed - 1; // Update needed count
+          // Re-sort if needed
+          sortedCourts.sort((a, b) => b[1] - a[1]);
+        }
+      }
+    });
+    
+    return this.createMatchesForRound(bracketData);
+  }
+
+  determineNextCourt(currentCourt, result) {
+    const courtMovement = {
+      'Padel Arenas': {
+        win: 'Padel Arenas',
+        loss: 'Coolbet',
+      },
+      Coolbet: {
+        win: 'Padel Arenas',
+        loss: 'Lux Express',
+      },
+      'Lux Express': {
+        win: 'Coolbet',
+        loss: '3p Logistics',
+      },
+      '3p Logistics': {
+        win: 'Lux Express',
+        loss: '3p Logistics',
+      },
+    };
+
+    return courtMovement[currentCourt][result];
+  }
+
+  createMatchesForRound(bracketData) {
+    this.COURT_ORDER.forEach((courtName, index) => {
+      const courtPlayers = this.players
+        .filter((p) => this.playerAssignments.get(p.id) === courtName)
+        .sort((a, b) =>
+          PlayerSortUtils.byGameScore(
+            a,
+            b,
+            bracketData.completedMatches,
+            bracketData.currentRound
+          )
+        );
+
+      if (courtPlayers.length >= 4) {
+        // Create teams by GameScore: highest with lowest, second highest with second lowest
+        const team1 = [courtPlayers[0], courtPlayers[3]];
+        const team2 = [courtPlayers[1], courtPlayers[2]];
+        this.createMatch(bracketData, courtName, team1, team2, index);
+      }
+    });
+  }
+
+  createMatch(bracketData, courtName, team1, team2, courtIndex) {
+    const match = {
+      id: `match-${Date.now()}-${courtIndex}`,
+      courtName,
+      team1,
+      team2,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: bracketData.currentRound + 1, // Next round
+    };
+    bracketData.courts[courtIndex].matches.push(match);
+  }
+
+  async updateMatchScore(matchId, scoreType, score) {
+    try {
+      // Create a deep copy of bracket data to modify
+      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
+      
+      // Find the match
+      let matchUpdated = false;
+      let foundMatch = null;
+
+      // Look in current matches
+      for (const court of updatedBracketData.courts) {
+        const match = court.matches.find((m) => m.id === matchId);
+        if (match) {
+          foundMatch = match;
+          break;
+        }
+      }
+
+      if (!foundMatch) {
+        throw new Error('Match not found');
+      }
+
+      const currentScore = score !== null ? parseInt(score, 10) : null;
+      const otherScore = scoreType === 'score1' ? foundMatch.score2 : foundMatch.score1;
+
+      // Validate score if both scores are set
+      if (currentScore !== null && otherScore !== null) {
+        if (!ValidationUtils.isValidScore(
+          scoreType === 'score1' ? currentScore : otherScore,
+          scoreType === 'score2' ? currentScore : otherScore
+        )) {
+          Swal.fire({
+            title: 'Invalid Score',
+            text: 'Scores must be between 0-10.',
+            icon: 'error'
+          });
+          return;
+        }
+      }
+
+      // Update the score
+      foundMatch[scoreType] = currentScore;
+      
+      // Check if match is completed
+      foundMatch.completed = foundMatch.score1 !== null && foundMatch.score2 !== null;
+      
+      if (foundMatch.completed) {
+        // Add to completed matches if not already there
+        const existingMatchIndex = updatedBracketData.completedMatches.findIndex(
+          (m) => m.id === foundMatch.id
+        );
+        
+        if (existingMatchIndex !== -1) {
+          updatedBracketData.completedMatches[existingMatchIndex] = { ...foundMatch };
+        } else {
+          updatedBracketData.completedMatches.push({ ...foundMatch });
+        }
+        
+        matchUpdated = true;
+      }
+
+      // Recalculate standings if needed
+      if (matchUpdated) {
+        this.recalculateStandings(updatedBracketData);
+      }
+      
+      // Save updated bracket data
+      await firebaseService.saveTournamentBracket(
+        this.selectedTournamentId,
+        updatedBracketData
+      );
+    } catch (error) {
+      console.error('Error updating match score:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to update match score. Please try again.',
+        icon: 'error'
+      });
+    }
+  }
+
+  recalculateStandings(bracketData) {
+    bracketData.standings = this.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      points: 0,
+      wins: 0,
+      losses: 0,
+      gamesPlayed: 0,
+    }));
+
+    bracketData.completedMatches.forEach((match) => {
+      const team1Points = match.score1 || 0;
+      const team2Points = match.score2 || 0;
+
+      match.team1.forEach((player) => {
+        const standing = bracketData.standings.find((s) => s.id === player.id);
+        if (standing) {
+          standing.points += team1Points;
+          if (team1Points > team2Points) standing.wins++;
+          else standing.losses++;
+          standing.gamesPlayed++;
+        }
+      });
+
+      match.team2.forEach((player) => {
+        const standing = bracketData.standings.find((s) => s.id === player.id);
+        if (standing) {
+          standing.points += team2Points;
+          if (team2Points > team1Points) standing.wins++;
+          else standing.losses++;
+          standing.gamesPlayed++;
+        }
+      });
+    });
+  }
+
+  renderMatches() {
+    if (!this.currentMatches || !this.bracketData) return;
+    
+    this.currentMatches.innerHTML = '';
+
+    this.bracketData.courts.forEach((court) => {
+      court.matches.forEach((match) => {
+        if (!match.completed) {
+          const matchElement = document.createElement('div');
+          matchElement.className = 'match';
+          matchElement.innerHTML = `
+            <div class="match-info">
+              <span class="court-name">${court.name}</span>
+              <div class="team">
+                <span class="team-name">${this.getTeamNames(match.team1)}</span>
+                <span class="score" onclick="makeScoreEditable(this, '${match.id}', 'score1')">${match.score1 ?? '-'}</span>
+              </div>
+              <div class="team">
+                <span class="team-name">${this.getTeamNames(match.team2)}</span>
+                <span class="score" onclick="makeScoreEditable(this, '${match.id}', 'score2')">${match.score2 ?? '-'}</span>
+              </div>
+            </div>
+          `;
+          this.currentMatches.appendChild(matchElement);
+        }
+      });
+    });
+  }
+
+  renderStandings() {
+    if (!this.standings || !this.bracketData?.standings?.length) {
+      if (this.standings) {
+        this.standings.innerHTML = '<div class="empty-standings">No standings available</div>';
+      }
       return;
     }
+
+    this.standings.innerHTML = '';
+
+    const sortedStandings = [...this.bracketData.standings].sort((a, b) => {
+      const pointsDiff = (b.points || 0) - (a.points || 0);
+      if (pointsDiff !== 0) return pointsDiff;
+      return (b.wins || 0) - (a.wins || 0);
+    });
+    
+    sortedStandings.forEach((player, index) => {
+      const standingElement = document.createElement('div');
+      standingElement.className = 'standing-item';
+      standingElement.innerHTML = `
+        <span class="rank">#${index + 1}</span>
+        <span class="team-name">${player.name}</span>
+        <span class="points">${player.points || 0}p</span>
+        <span class="record">${player.wins || 0}-${player.losses || 0}</span>
+      `;
+      this.standings.appendChild(standingElement);
+    });
   }
 
-  // Update the score
-  match[scoreType] = currentScore;
+  renderRegisteredPlayers() {
+    if (!this.playersGrid) return;
+    
+    this.playersGrid.innerHTML = '';
 
-  // Allow updating the match even after completion
-  match.completed = match.score1 !== null && match.score2 !== null;
-  matchUpdated = true;
+    const sortedPlayers = [...this.players].sort((a, b) => b.ranking - a.ranking);
+    const numColumns = 4;
+    const numRows = Math.ceil(this.players.length / numColumns);
 
-  // Ensure completed match is updated instead of duplicated
-  const existingMatchIndex = bracketData.completedMatches.findIndex(
-    (m) => m.id === match.id
-  );
-  if (existingMatchIndex !== -1) {
-    bracketData.completedMatches[existingMatchIndex] = { ...match };
-  } else if (match.completed) {
-    bracketData.completedMatches.push({ ...match });
-  }
+    const columns = Array.from({ length: numColumns }, () => []);
 
-  // Update standings and UI if a match was updated
-  if (matchUpdated) {
-    recalculateStandings();
-    saveBracketData();
-    renderStandings();
-    renderGameScores();
-    checkRoundCompletion();
-  }
-}
-
-function recalculateStandings() {
-  bracketData.standings = players.map((player) => ({
-    id: player.id,
-    name: player.name,
-    points: 0,
-    wins: 0,
-    losses: 0,
-    gamesPlayed: 0,
-  }));
-
-  bracketData.completedMatches.forEach((match) => {
-    const team1Points = match.score1 || 0;
-    const team2Points = match.score2 || 0;
-
-    match.team1.forEach((player) => {
-      const standing = bracketData.standings.find((s) => s.id === player.id);
-      if (standing) {
-        standing.points += team1Points;
-        if (team1Points > team2Points) standing.wins++;
-        else standing.losses++;
-        standing.gamesPlayed++;
-      }
+    sortedPlayers.forEach((player, index) => {
+      const columnIndex = Math.floor(index / numRows);
+      columns[columnIndex].push(player);
     });
 
-    match.team2.forEach((player) => {
-      const standing = bracketData.standings.find((s) => s.id === player.id);
-      if (standing) {
-        standing.points += team2Points;
-        if (team2Points > team1Points) standing.wins++;
-        else standing.losses++;
-        standing.gamesPlayed++;
-      }
-    });
-  });
-}
+    columns.forEach((column) => {
+      const columnDiv = document.createElement('div');
+      columnDiv.className = 'player-column';
 
-function loadPlayers() {
-  let allPlayers = players;
-  tournamentPlayers = players;
-  players = tournamentPlayers
-    .map((tournamentPlayer) => {
-      const fullPlayer = allPlayers.find((p) => p.id === tournamentPlayer.id);
-      if (!fullPlayer) {
-        console.error(
-          `Player ${tournamentPlayer.id} not found in players database`
+      column.forEach((player) => {
+        const playerCard = document.createElement('div');
+        playerCard.className = 'player-card';
+        playerCard.innerHTML = `
+          <div class="player-info">
+            <span class="player-name">${player.name}</span>
+            <span class="player-rating">${player.ranking || 0}</span>
+          </div>
+        `;
+        columnDiv.appendChild(playerCard);
+      });
+
+      this.playersGrid.appendChild(columnDiv);
+    });
+  }
+
+  renderGameScores() {
+    // First remove existing table if any
+    const existingTable = document.querySelector('.game-score-table');
+    if (existingTable) {
+      existingTable.remove();
+    }
+
+    if (!this.bracketData || !this.standings) return;
+
+    const gameScoreTable = document.createElement('div');
+    gameScoreTable.className = 'game-score-table';
+
+    // Header
+    const header = document.createElement('h3');
+    header.textContent = 'GameScore Tracking';
+    gameScoreTable.appendChild(header);
+
+    // Create scores grid
+    const scoreGrid = document.createElement('div');
+    scoreGrid.className = 'score-grid';
+
+    this.players.forEach((player) => {
+      const matchPoints = this.bracketData.completedMatches
+        .filter((m) => m.round === this.bracketData.currentRound)
+        .find(
+          (m) =>
+            m.team1.some((p) => p.id === player.id) ||
+            m.team2.some((p) => p.id === player.id)
         );
-        return null;
+
+      let gameScore = player.ranking || 0; // Base score is player's rating
+      if (matchPoints) {
+        const score = matchPoints.team1.some((p) => p.id === player.id)
+          ? matchPoints.score1
+          : matchPoints.score2;
+        gameScore = score * 100 + player.ranking;
       }
-      // Ensure rating exists
-      //       if (typeof fullPlayer.ranking !== "number") {
-      //         console.error(`Player ${fullPlayer.name} has invalid rating`);
-      //         return null;
-      //       }
-      return {
-        ...tournamentPlayer,
-        ...fullPlayer,
-        rating: fullPlayer.ranking, // Explicitly set rating
-      };
-    })
-    .filter((p) => p !== null); // Remove any invalid players
 
-  playerCountEl.textContent = `${players.length} Players`;
-}
-
-function renderMatches() {
-  currentMatches.innerHTML = "";
-
-  bracketData.courts.forEach((court) => {
-    court.matches.forEach((match) => {
-      if (!match.completed) {
-        const matchElement = document.createElement("div");
-
-        matchElement.className = "match";
-        matchElement.innerHTML = `
-                        <div class="match-info">
-                            <span class="court-name">${court.name}</span>
-                            <div class="team">
-                                <span class="team-name">${getTeamNames(
-                                  match.team1
-                                )}</span>
-                                <span class="score" onclick="makeScoreEditable(this, '${
-                                  match.id
-                                }', 'score1')">${match.score1 ?? "-"}</span>
-                            </div>
-                            <div class="team">
-                                <span class="team-name">${getTeamNames(
-                                  match.team2
-                                )}</span>
-                                <span class="score" onclick="makeScoreEditable(this, '${
-                                  match.id
-                                }', 'score2')">${match.score2 ?? "-"}</span>
-                            </div>
-                        </div>
-                    `;
-        currentMatches.appendChild(matchElement);
-      }
+      const scoreRow = document.createElement('div');
+      scoreRow.className = 'score-row';
+      scoreRow.innerHTML = `
+        <span class="player-name">${player.name}</span>
+        <span class="game-score">${gameScore}</span>
+      `;
+      scoreGrid.appendChild(scoreRow);
     });
-  });
-}
 
-function renderStandings() {
-  standings.innerHTML = "";
+    gameScoreTable.appendChild(scoreGrid);
 
-  if (!bracketData?.standings?.length) {
-    standings.innerHTML =
-      '<div class="empty-standings">No standings available</div>';
-    return;
-  }
-
-  const sortedStandings = [...bracketData.standings].sort((a, b) => {
-    const pointsDiff = (b.points || 0) - (a.points || 0);
-    if (pointsDiff !== 0) return pointsDiff;
-    return (b.wins || 0) - (a.wins || 0);
-  });
-  sortedStandings.forEach((player, index) => {
-    const standingElement = document.createElement("div");
-    standingElement.className = "standing-item";
-    standingElement.innerHTML = `
-                <span class="rank">#${index + 1}</span>
-                <span class="team-name">${player.name}</span>
-                <span class="points">${player.points || 0}p</span>
-                <span class="record">${player.wins || 0}-${
-      player.losses || 0
-    }</span>
-            `;
-    standings.appendChild(standingElement);
-  });
-}
-
-function checkRoundCompletion() {
-  const allMatchesCompleted = bracketData.courts.every((court) =>
-    court.matches.every((m) => m.completed)
-  );
-
-  if (allMatchesCompleted) {
-    if (bracketData.currentRound >= 4) {
-      showTournamentEndOption();
+    // Add the table after standings
+    if (this.standings) {
+      this.standings.parentNode.insertBefore(gameScoreTable, this.standings.nextSibling);
     }
   }
-}
 
-function showTournamentEndOption() {
-  if (!document.getElementById("endTournament")) {
-    const endTournamentBtn = document.createElement("button");
-    endTournamentBtn.id = "endTournament";
-    endTournamentBtn.className = "btn-primary";
-    endTournamentBtn.textContent = "End Tournament";
-    endTournamentBtn.onclick = endTournament;
-    generateBtn.disabled = true;
-    resetRoundBtn.disabled = true;
-    startTimerBtn.disabled = true;
-    document.querySelector(".control-buttons").appendChild(endTournamentBtn);
+  checkRoundCompletion() {
+    if (!this.bracketData) return;
+    
+    const allMatchesCompleted = this.bracketData.courts.every((court) =>
+      court.matches.every((m) => m.completed)
+    );
+
+    if (allMatchesCompleted && this.bracketData.currentRound >= 4) {
+      this.showTournamentEndOption();
+    }
   }
-}
 
-function endTournament() {
-  Swal.fire({
-    title: "Are you sure?",
-    text: "This will finalize all standings.",
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "Yes, end it!",
-    cancelButtonText: "No, keep it",
-  }).then((result) => {
+  showTournamentEndOption() {
+    if (!document.getElementById('endTournament')) {
+      const endTournamentBtn = document.createElement('button');
+      endTournamentBtn.id = 'endTournament';
+      endTournamentBtn.className = 'btn-primary';
+      endTournamentBtn.textContent = 'End Tournament';
+      endTournamentBtn.onclick = () => this.endTournament();
+      
+      if (this.generateBtn) {
+        this.generateBtn.disabled = true;
+      }
+      
+      if (this.resetRoundBtn) {
+        this.resetRoundBtn.disabled = true;
+      }
+      
+      if (this.startTimerBtn) {
+        this.startTimerBtn.disabled = true;
+      }
+      
+      document.querySelector('.control-buttons')?.appendChild(endTournamentBtn);
+    }
+  }
+
+  async endTournament() {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'This will finalize all standings and complete the tournament.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, end it!',
+      cancelButtonText: 'No, keep it',
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    try {
+      Swal.fire({
+        title: 'Finalizing tournament...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Update tournament status to completed
+      await firebaseService.updateTournament(
+        this.selectedTournamentId,
+        { 
+          status_id: 3, // 3 = completed
+          completedDate: new Date().toISOString()
+        }
+      );
+      
+      // Add final standings to tournament data
+      const finalStandings = this.bracketData.standings
+        .sort((a, b) => b.points - a.points || b.wins - a.wins)
+        .map((player, index) => ({
+          ...player,
+          finalRank: index + 1,
+        }));
+      
+      // Update bracket data with final results
+      const updatedBracketData = {
+        ...this.bracketData,
+        completed: true,
+        finalStandings
+      };
+      
+      await firebaseService.saveTournamentBracket(
+        this.selectedTournamentId,
+        updatedBracketData
+      );
+      
+      Swal.close();
+      
+      await Swal.fire({
+        title: 'Tournament Completed!',
+        text: 'Final standings have been saved.',
+        icon: 'success'
+      });
+      
+      // Disable all controls
+      if (document.getElementById('endTournament')) {
+        document.getElementById('endTournament').disabled = true;
+      }
+      
+      // Redirect to tournament list
+      window.location.href = 'tournament-list.html';
+    } catch (error) {
+      Swal.close();
+      console.error('Error ending tournament:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to end tournament. Please try again.',
+        icon: 'error'
+      });
+    }
+  }
+
+  async resetCurrentRound() {
+    if (!this.bracketData || this.bracketData.currentRound === 0) {
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: 'Reset Current Round?',
+      text: 'Are you sure you want to reset the current round? This will clear all match scores and standings for this round.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reset it!',
+      cancelButtonText: 'Cancel'
+    });
+
     if (!result.isConfirmed) return;
 
-    tournament.status = "completed";
-    tournament.completedDate = new Date().toISOString();
-    tournament.finalStandings = bracketData.standings
-      .sort((a, b) => b.points - a.points || b.wins - a.wins)
-      .map((player, index) => ({
-        ...player,
-        finalRank: index + 1,
-      }));
-
-    const tournaments = JSON.parse(localStorage.getItem("tournaments") || "[]");
-    const tournamentIndex = tournaments.findIndex((t) => t.id === tournament.id);
-    if (tournamentIndex !== -1) {
-      tournaments[tournamentIndex] = tournament;
-      localStorage.setItem("tournaments", JSON.stringify(tournaments));
-    }
-
-    document.getElementById("endTournament").disabled = true;
-
-    Swal.fire({
-      title: "Tournament Completed!",
-      text: "Final standings have been saved.",
-      icon: "success",
-    }).then(() => {
-      window.location.href = "tournament-list.html";
-    });
-  });
-}
-
-function resetCurrentRound() {
-  if (!bracketData || bracketData.currentRound === 0) {
-    return;
-  }
-
-  if (!confirm("Are you sure you want to reset the current round?")) {
-    return;
-  }
-
-  bracketData.courts.forEach((court) => {
-    court.matches = [];
-  });
-
-  if (bracketData.completedMatches) {
-    bracketData.completedMatches = bracketData.completedMatches.filter(
-      (match) => match.round !== bracketData.currentRound
-    );
-  }
-
-  bracketData.currentRound--;
-  roundCountEl.textContent = `Round ${bracketData.currentRound}/4`;
-
-  if (bracketData.currentRound === 0) {
-    registeredPlayersContainer.style.display = "block";
-  }
-
-  recalculateStandings();
-  renderMatches();
-  gameTimer.reset();
-  saveBracketData();
-}
-
-function saveBracketData() {
-  localStorage.setItem(
-    `tournament_${tournament.id}_bracket`,
-    JSON.stringify(bracketData)
-  );
-}
-
-// Global Functions
-window.makeScoreEditable = function (element, matchId, scoreType) {
-  const input = document.createElement("input");
-  input.type = "number";
-  input.className = "score-input";
-  input.value = element.textContent !== "-" ? element.textContent : "";
-  input.min = 0;
-
-  input.onblur = () => {
-    const score = input.value ? parseInt(input.value) : null;
-    updateMatchScore(matchId, scoreType, score);
-    element.textContent = score ?? "-";
-  };
-
-  input.onkeypress = (e) => {
-    if (e.key === "Enter") {
-      input.blur();
-    }
-  };
-
-  element.textContent = "";
-  element.appendChild(input);
-  input.focus();
-};
-
-// Event Listeners
-generateBtn.addEventListener("click", generateNextRound);
-startTimerBtn.addEventListener("click", () => {
-  if (gameTimer.isRunning) {
-    gameTimer.reset();
-  } else {
-    gameTimer.start();
-  }
-});
-resetRoundBtn.addEventListener("click", resetCurrentRound);
-
-const gameTimer = {
-  time: 20 * 60,
-  isRunning: false,
-  interval: null,
-
-  start() {
-    if (!this.isRunning) {
-      this.isRunning = true;
-      startTimerBtn.textContent = "Reset Timer";
-      this.interval = setInterval(() => {
-        this.time--;
-        this.updateDisplay();
-        if (this.time <= 0) {
-          this.timeUp();
+    try {
+      Swal.fire({
+        title: 'Resetting round...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
         }
-      }, 1000);
+      });
+      
+      // Create a deep copy of bracket data to modify
+      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
+      
+      // Clear current matches
+      updatedBracketData.courts.forEach((court) => {
+        court.matches = [];
+      });
+
+      // Remove completed matches for this round
+      if (updatedBracketData.completedMatches) {
+        updatedBracketData.completedMatches = updatedBracketData.completedMatches.filter(
+          (match) => match.round !== updatedBracketData.currentRound
+        );
+      }
+
+      // Decrement round counter
+      updatedBracketData.currentRound--;
+      
+      // Show registered players if going back to round 0
+      if (updatedBracketData.currentRound === 0 && this.registeredPlayersContainer) {
+        this.registeredPlayersContainer.style.display = 'block';
+      }
+
+      // Recalculate standings
+      this.recalculateStandings(updatedBracketData);
+      
+      // Save updated bracket data
+      await firebaseService.saveTournamentBracket(
+        this.selectedTournamentId,
+        updatedBracketData
+      );
+      
+      Swal.close();
+      
+      // Reset timer
+      this.gameTimer.reset();
+      
+      await Swal.fire({
+        title: 'Round Reset',
+        text: 'The current round has been reset successfully.',
+        icon: 'success',
+        timer: 1500
+      });
+    } catch (error) {
+      Swal.close();
+      console.error('Error resetting round:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to reset round. Please try again.',
+        icon: 'error'
+      });
     }
-  },
-
-  reset() {
-    this.time = 20 * 60;
-    this.isRunning = false;
-    startTimerBtn.textContent = "Start Timer";
-    clearInterval(this.interval);
-    this.updateDisplay();
-    timerDisplay.classList.remove("time-up");
-  },
-
-  updateDisplay() {
-    const minutes = Math.floor(this.time / 60);
-    const seconds = this.time % 60;
-    timerDisplay.textContent = `${minutes.toString().padStart(2, "0")}:${seconds
-      .toString()
-      .padStart(2, "0")}`;
-  },
-
-  timeUp() {
-    clearInterval(this.interval);
-    this.isRunning = false;
-    startTimerBtn.textContent = "Start Timer";
-    timerDisplay.classList.add("time-up");
-    alert("Round time is up! Please enter final scores.");
-  },
-};
-
-generateFirstRound();
-renderRegisteredPlayers();
+  } catch (error) {}}
+  
+export default TournamentBracketMexicano;
