@@ -550,103 +550,96 @@ function renderGameScores() {
 
 function generateSubsequentRound() {
   playerAssignments.clear();
+  
+  const previousMatches = bracketData.completedMatches
+      .filter(m => m.round === bracketData.currentRound);
 
-  const previousMatches = bracketData.completedMatches.filter(
-    (m) => m.round === bracketData.currentRound
-  );
-
-  previousMatches.forEach((match) => {
-    const score1 = match.score1;
-    const score2 = match.score2;
-
-    if (score1 !== score2) {
-      // Clear win/loss - simple up/down movement
-      if (score1 > score2) {
-        match.team1.forEach((player) => {
-          playerAssignments.set(
-            player.id,
-            determineNextCourt(match.courtName, 'win')
-          );
-        });
-        match.team2.forEach((player) => {
-          playerAssignments.set(
-            player.id,
-            determineNextCourt(match.courtName, 'loss')
-          );
-        });
-      } else {
-        match.team2.forEach((player) => {
-          playerAssignments.set(
-            player.id,
-            determineNextCourt(match.courtName, 'win')
-          );
-        });
-        match.team1.forEach((player) => {
-          playerAssignments.set(
-            player.id,
-            determineNextCourt(match.courtName, 'loss')
-          );
-        });
-      }
-    } else {
-      // Tie (5-5) - compare partners' GameScores
-      // Team 1 partners comparison
-      const player1GameScore = score1 * 100 + match.team1[0].rating;
-      const player2GameScore = score1 * 100 + match.team1[1].rating;
-
-      if (player1GameScore > player2GameScore) {
-        playerAssignments.set(
-          match.team1[0].id,
-          determineNextCourt(match.courtName, 'win')
-        );
-        playerAssignments.set(
-          match.team1[1].id,
-          determineNextCourt(match.courtName, 'loss')
-        );
-      } else {
-        playerAssignments.set(
-          match.team1[0].id,
-          determineNextCourt(match.courtName, 'loss')
-        );
-        playerAssignments.set(
-          match.team1[1].id,
-          determineNextCourt(match.courtName, 'win')
-        );
-      }
-
-      // Team 2 partners comparison
-      const player3GameScore = score2 * 100 + match.team2[0].rating;
-      const player4GameScore = score2 * 100 + match.team2[1].rating;
-
-      if (player3GameScore > player4GameScore) {
-        playerAssignments.set(
-          match.team2[0].id,
-          determineNextCourt(match.courtName, 'win')
-        );
-        playerAssignments.set(
-          match.team2[1].id,
-          determineNextCourt(match.courtName, 'loss')
-        );
-      } else {
-        playerAssignments.set(
-          match.team2[0].id,
-          determineNextCourt(match.courtName, 'loss')
-        );
-        playerAssignments.set(
-          match.team2[1].id,
-          determineNextCourt(match.courtName, 'win')
-        );
-      }
-    }
+  // Arvutame kõigi mängijate GameScore'id
+  const playerGameScores = new Map();
+  
+  previousMatches.forEach(match => {
+      // Meeskond 1 GameScore'id
+      match.team1.forEach(player => {
+          const gameScore = (match.score1 * 100) + player.rating;
+          playerGameScores.set(player.id, gameScore);
+          console.log(`${player.name} GameScore: ${gameScore}`);
+      });
+      
+      // Meeskond 2 GameScore'id
+      match.team2.forEach(player => {
+          const gameScore = (match.score2 * 100) + player.rating;
+          playerGameScores.set(player.id, gameScore);
+          console.log(`${player.name} GameScore: ${gameScore}`);
+      });
   });
-  console.log(players.filter((p) => !playerAssignments.has(p.id)));
-  const unassignedCount = players.filter(
-    (p) => !playerAssignments.has(p.id)
-  ).length;
-  if (unassignedCount > 0) {
-    checkForConflicts();
+
+  // Määrame liikumise väljakute vahel
+  previousMatches.forEach(match => {
+      const score1 = match.score1;
+      const score2 = match.score2;
+
+      if (score1 !== score2) {
+          // Selge võit/kaotus
+          if (score1 > score2) {
+              match.team1.forEach(player => {
+                  playerAssignments.set(player.id, determineNextCourt(match.courtName, 'win'));
+              });
+              match.team2.forEach(player => {
+                  playerAssignments.set(player.id, determineNextCourt(match.courtName, 'loss'));
+              });
+          } else {
+              match.team2.forEach(player => {
+                  playerAssignments.set(player.id, determineNextCourt(match.courtName, 'win'));
+              });
+              match.team1.forEach(player => {
+                  playerAssignments.set(player.id, determineNextCourt(match.courtName, 'loss'));
+              });
+          }
+      } else {
+          // Viigi korral võrdleme paari siseselt GameScore'e
+          console.log('Viik väljakul: ' + match.courtName);
+          
+          // Meeskond 1 võrdlus (paari sisene)
+          const player1 = match.team1[0];
+          const player2 = match.team1[1];
+          const player1GameScore = playerGameScores.get(player1.id);
+          const player2GameScore = playerGameScores.get(player2.id);
+          
+          console.log(`Tiim 1 võrdlus: ${player1.name}: ${player1GameScore} vs ${player2.name}: ${player2GameScore}`);
+          
+          if (player1GameScore > player2GameScore) {
+              playerAssignments.set(player1.id, determineNextCourt(match.courtName, 'win'));
+              playerAssignments.set(player2.id, determineNextCourt(match.courtName, 'loss'));
+          } else {
+              playerAssignments.set(player1.id, determineNextCourt(match.courtName, 'loss'));
+              playerAssignments.set(player2.id, determineNextCourt(match.courtName, 'win'));
+          }
+
+          // Meeskond 2 võrdlus (paari sisene)
+          const player3 = match.team2[0];
+          const player4 = match.team2[1];
+          const player3GameScore = playerGameScores.get(player3.id);
+          const player4GameScore = playerGameScores.get(player4.id);
+          
+          console.log(`Tiim 2 võrdlus: ${player3.name}: ${player3GameScore} vs ${player4.name}: ${player4GameScore}`);
+          
+          if (player3GameScore > player4GameScore) {
+              playerAssignments.set(player3.id, determineNextCourt(match.courtName, 'win'));
+              playerAssignments.set(player4.id, determineNextCourt(match.courtName, 'loss'));
+          } else {
+              playerAssignments.set(player3.id, determineNextCourt(match.courtName, 'loss'));
+              playerAssignments.set(player4.id, determineNextCourt(match.courtName, 'win'));
+          }
+      }
+  });
+
+  // Kontrollime, et kõik mängijad oleksid paigutatud
+  const unassignedPlayers = players.filter(p => !playerAssignments.has(p.id));
+  if (unassignedPlayers.length > 0) {
+      console.log("Hoiatus: Mõned mängijad on paigutamata!", unassignedPlayers);
+      checkForConflicts();
   } else {
-    createMatchesForRound();
+      createMatchesForRound();
   }
 }
 
@@ -674,24 +667,43 @@ function determineNextCourt(currentCourt, result) {
 }
 
 function createMatchesForRound() {
-  COURT_ORDER.forEach((courtName, index) => {
-    const courtPlayers = players
-      .filter((p) => playerAssignments.get(p.id) === courtName)
-      .sort((a, b) =>
-        PlayerSortUtils.byGameScore(
-          a,
-          b,
-          bracketData.completedMatches,
-          bracketData.currentRound
-        )
-      );
+  // Kopeerime playerGameScores, kui see on vaja uuesti arvutada
+  const playerGameScores = new Map();
+  bracketData.completedMatches
+      .filter(m => m.round === bracketData.currentRound)
+      .forEach(match => {
+          match.team1.forEach(player => {
+              playerGameScores.set(player.id, (match.score1 * 100) + player.rating);
+          });
+          match.team2.forEach(player => {
+              playerGameScores.set(player.id, (match.score2 * 100) + player.rating);
+          });
+      });
 
-    if (courtPlayers.length >= 4) {
-      // Create teams by GameScore: highest with lowest, second highest with second lowest
-      const team1 = [courtPlayers[0], courtPlayers[3]];
-      const team2 = [courtPlayers[1], courtPlayers[2]];
-      createMatch(courtName, team1, team2, index);
-    }
+  COURT_ORDER.forEach((courtName, index) => {
+      // Filtreerime mängijad, kes on määratud sellele väljakule
+      const courtPlayers = players.filter(p => playerAssignments.get(p.id) === courtName);
+      
+      // Kui väljakul on piisavalt mängijaid, moodustame paarid
+      if (courtPlayers.length >= 4) {
+          // Sorteerime mängijad GameScore'i järgi
+          courtPlayers.sort((a, b) => {
+              const aGameScore = playerGameScores.get(a.id) || a.rating;
+              const bGameScore = playerGameScores.get(b.id) || b.rating;
+              return bGameScore - aGameScore; // Kõrgemast madalamale
+          });
+          
+          console.log(`Väljakul ${courtName} mängijad järjestatult:`, 
+              courtPlayers.map(p => `${p.name} (${playerGameScores.get(p.id) || p.rating})`));
+          
+          // Moodustame paarid: parim halvimaga, teine parim teise halvimaga
+          const team1 = [courtPlayers[0], courtPlayers[3]];
+          const team2 = [courtPlayers[1], courtPlayers[2]];
+          
+          createMatch(courtName, team1, team2, index);
+      } else {
+          console.warn(`Väljakul ${courtName} pole piisavalt mängijaid (${courtPlayers.length})`);
+      }
   });
 }
 
