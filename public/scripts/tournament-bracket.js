@@ -1383,6 +1383,6 @@ formatSelect.addEventListener('change', (e) => {
 
 // Initialize on load
 
-generateFirstRound();
-renderRegisteredPlayers();
+//generateFirstRound();
+//renderRegisteredPlayers();
 
