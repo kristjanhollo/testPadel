@@ -548,13 +548,41 @@ function renderGameScores() {
   }
 }
 
+// Funktsioon, mis määrab kuhu mängija järgmises ringis liigub
+function determineNextCourt(currentCourt, result) {
+  const courtMovement = {
+      'Padel Arenas': {
+          'win': 'Padel Arenas',
+          'loss': 'Coolbet'
+      },
+      'Coolbet': {
+          'win': 'Padel Arenas',
+          'loss': 'Lux Express'
+      },
+      'Lux Express': {
+          'win': 'Coolbet',
+          'loss': '3p Logistics'
+      },
+      '3p Logistics': {
+          'win': 'Lux Express',
+          'loss': '3p Logistics'
+      }
+  };
+  
+  return courtMovement[currentCourt][result];
+}
+
+// Järgmise ringi mängude genereerimise funktsioon
 function generateSubsequentRound() {
   playerAssignments.clear();
   
+  // Leia eelmise ringi mängud
   const previousMatches = bracketData.completedMatches
       .filter(m => m.round === bracketData.currentRound);
+  
+  console.log("Eelmise ringi mängud:", previousMatches);
 
-  // Arvutame kõigi mängijate GameScore'id
+  // Arvuta GameScore'id kõigile mängijatele
   const playerGameScores = new Map();
   
   previousMatches.forEach(match => {
@@ -573,33 +601,42 @@ function generateSubsequentRound() {
       });
   });
 
-  // Määrame liikumise väljakute vahel
+  // Määra igale mängijale liikumine väljakute vahel
   previousMatches.forEach(match => {
       const score1 = match.score1;
       const score2 = match.score2;
 
       if (score1 !== score2) {
-          // Selge võit/kaotus
+          // Selge võit/kaotus - paar ei liigu koos
           if (score1 > score2) {
+              // Võitja meeskond liigub üles
               match.team1.forEach(player => {
                   playerAssignments.set(player.id, determineNextCourt(match.courtName, 'win'));
+                  console.log(`${player.name} võitis, liigub: ${determineNextCourt(match.courtName, 'win')}`);
               });
+              
+              // Kaotaja meeskond liigub alla
               match.team2.forEach(player => {
                   playerAssignments.set(player.id, determineNextCourt(match.courtName, 'loss'));
+                  console.log(`${player.name} kaotas, liigub: ${determineNextCourt(match.courtName, 'loss')}`);
               });
           } else {
+              // Meeskond 2 võitis
               match.team2.forEach(player => {
                   playerAssignments.set(player.id, determineNextCourt(match.courtName, 'win'));
+                  console.log(`${player.name} võitis, liigub: ${determineNextCourt(match.courtName, 'win')}`);
               });
+              
               match.team1.forEach(player => {
                   playerAssignments.set(player.id, determineNextCourt(match.courtName, 'loss'));
+                  console.log(`${player.name} kaotas, liigub: ${determineNextCourt(match.courtName, 'loss')}`);
               });
           }
       } else {
           // Viigi korral võrdleme paari siseselt GameScore'e
           console.log('Viik väljakul: ' + match.courtName);
           
-          // Meeskond 1 võrdlus (paari sisene)
+          // Meeskond 1 võrdlus
           const player1 = match.team1[0];
           const player2 = match.team1[1];
           const player1GameScore = playerGameScores.get(player1.id);
@@ -610,12 +647,16 @@ function generateSubsequentRound() {
           if (player1GameScore > player2GameScore) {
               playerAssignments.set(player1.id, determineNextCourt(match.courtName, 'win'));
               playerAssignments.set(player2.id, determineNextCourt(match.courtName, 'loss'));
+              console.log(`${player1.name} liigub: ${determineNextCourt(match.courtName, 'win')}`);
+              console.log(`${player2.name} liigub: ${determineNextCourt(match.courtName, 'loss')}`);
           } else {
               playerAssignments.set(player1.id, determineNextCourt(match.courtName, 'loss'));
               playerAssignments.set(player2.id, determineNextCourt(match.courtName, 'win'));
+              console.log(`${player1.name} liigub: ${determineNextCourt(match.courtName, 'loss')}`);
+              console.log(`${player2.name} liigub: ${determineNextCourt(match.courtName, 'win')}`);
           }
 
-          // Meeskond 2 võrdlus (paari sisene)
+          // Meeskond 2 võrdlus
           const player3 = match.team2[0];
           const player4 = match.team2[1];
           const player3GameScore = playerGameScores.get(player3.id);
@@ -626,79 +667,57 @@ function generateSubsequentRound() {
           if (player3GameScore > player4GameScore) {
               playerAssignments.set(player3.id, determineNextCourt(match.courtName, 'win'));
               playerAssignments.set(player4.id, determineNextCourt(match.courtName, 'loss'));
+              console.log(`${player3.name} liigub: ${determineNextCourt(match.courtName, 'win')}`);
+              console.log(`${player4.name} liigub: ${determineNextCourt(match.courtName, 'loss')}`);
           } else {
               playerAssignments.set(player3.id, determineNextCourt(match.courtName, 'loss'));
               playerAssignments.set(player4.id, determineNextCourt(match.courtName, 'win'));
+              console.log(`${player3.name} liigub: ${determineNextCourt(match.courtName, 'loss')}`);
+              console.log(`${player4.name} liigub: ${determineNextCourt(match.courtName, 'win')}`);
           }
       }
   });
 
-  // Kontrollime, et kõik mängijad oleksid paigutatud
+  // Kontrolli, kas kõik mängijad on paigutatud
   const unassignedPlayers = players.filter(p => !playerAssignments.has(p.id));
   if (unassignedPlayers.length > 0) {
       console.log("Hoiatus: Mõned mängijad on paigutamata!", unassignedPlayers);
       checkForConflicts();
   } else {
-      createMatchesForRound();
+      // Logi enne mängude loomist, millistel väljakutel mängijad on
+      COURT_ORDER.forEach(court => {
+          const courtPlayers = players.filter(p => playerAssignments.get(p.id) === court);
+          console.log(`Väljakul ${court} on mängijad:`, courtPlayers.map(p => p.name));
+      });
+      
+      // Loo mängud järgmiseks ringiks
+      createMatchesForRound(playerGameScores);
   }
 }
 
-function determineNextCourt(currentCourt, result) {
-  const courtMovement = {
-    'Padel Arenas': {
-      win: 'Padel Arenas',
-      loss: 'Coolbet',
-    },
-    Coolbet: {
-      win: 'Padel Arenas',
-      loss: 'Lux Express',
-    },
-    'Lux Express': {
-      win: 'Coolbet',
-      loss: '3p Logistics',
-    },
-    '3p Logistics': {
-      win: 'Lux Express',
-      loss: '3p Logistics',
-    },
-  };
-
-  return courtMovement[currentCourt][result];
-}
-
-function createMatchesForRound() {
-  // Kopeerime playerGameScores, kui see on vaja uuesti arvutada
-  const playerGameScores = new Map();
-  bracketData.completedMatches
-      .filter(m => m.round === bracketData.currentRound)
-      .forEach(match => {
-          match.team1.forEach(player => {
-              playerGameScores.set(player.id, (match.score1 * 100) + player.rating);
-          });
-          match.team2.forEach(player => {
-              playerGameScores.set(player.id, (match.score2 * 100) + player.rating);
-          });
-      });
-
+// Funktsioon paaride moodustamiseks järgmiseks ringiks
+function createMatchesForRound(playerGameScores) {
   COURT_ORDER.forEach((courtName, index) => {
-      // Filtreerime mängijad, kes on määratud sellele väljakule
+      // Leia mängijad sellel väljakul
       const courtPlayers = players.filter(p => playerAssignments.get(p.id) === courtName);
       
-      // Kui väljakul on piisavalt mängijaid, moodustame paarid
+      // Kontrolli, kas väljakul on piisavalt mängijaid
       if (courtPlayers.length >= 4) {
-          // Sorteerime mängijad GameScore'i järgi
+          // Sorteeri mängijad GameScore'i järgi (kõrgeimast madalaimale)
           courtPlayers.sort((a, b) => {
               const aGameScore = playerGameScores.get(a.id) || a.rating;
               const bGameScore = playerGameScores.get(b.id) || b.rating;
-              return bGameScore - aGameScore; // Kõrgemast madalamale
+              return bGameScore - aGameScore;
           });
           
-          console.log(`Väljakul ${courtName} mängijad järjestatult:`, 
+          console.log(`Sorteeritud mängijad väljakul ${courtName}:`, 
               courtPlayers.map(p => `${p.name} (${playerGameScores.get(p.id) || p.rating})`));
           
-          // Moodustame paarid: parim halvimaga, teine parim teise halvimaga
-          const team1 = [courtPlayers[0], courtPlayers[3]];
-          const team2 = [courtPlayers[1], courtPlayers[2]];
+          // SNP sammud dokumendi kohaselt: 1&4 vs 2&3
+          const team1 = [courtPlayers[0], courtPlayers[3]];  // 1. ja 4. mängija
+          const team2 = [courtPlayers[1], courtPlayers[2]];  // 2. ja 3. mängija
+          
+          console.log(`${courtName} - tiim 1: ${team1.map(p => p.name)}, tiim 2: ${team2.map(p => p.name)}`);
           
           createMatch(courtName, team1, team2, index);
       } else {
