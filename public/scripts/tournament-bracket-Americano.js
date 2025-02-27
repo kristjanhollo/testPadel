@@ -1,3 +1,5 @@
+import RatingService from './services/rating-service';
+
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const timerDisplay = document.getElementById('gameTimer');
