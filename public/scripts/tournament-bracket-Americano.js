@@ -2,7 +2,35 @@
 import '../styles/tournament-bracket-Americano.css';
 import firebaseService from './services/firebase-service';
 
-
+// Check if SweetAlert is available globally, otherwise use basic alerts
+const Swal = window.Swal || {
+  fire: (options) => {
+    if (options.icon === 'error' || options.icon === 'warning') {
+      alert(options.title + '\n' + (options.text || ''));
+      return Promise.reject();
+    } else if (options.title && options.text) {
+      alert(options.title + '\n' + options.text);
+    } else {
+      alert(options.title || options.text);
+    }
+    
+    // Mock SweetAlert's returned Promise API
+    return {
+      then: (callback) => {
+        if (options.showCancelButton) {
+          if (confirm('Confirm this action?')) {
+            callback({ isConfirmed: true });
+          }
+        } else {
+          callback({ isConfirmed: true });
+        }
+        return { catch: () => {} };
+      }
+    };
+  },
+  close: () => {},
+  showLoading: () => {}
+};
 
 /**
  * Tournament Bracket Americano class
@@ -154,12 +182,12 @@ class TournamentBracketAmericano {
         }
       );
       
-      // Listen for bracket data changes
-      const unsubscribeBracket = firebaseService.listenToTournamentBracket(
+      // Listen for bracket data changes - USING AMERICANO SPECIFIC METHOD
+      const unsubscribeBracket = firebaseService.listenToTournamentBracketAmericano(
         this.selectedTournamentId,
         (bracketData) => {
           if (bracketData) {
-            console.log('Bracket data received. Current round:', bracketData.currentRound);
+            console.log('Americano bracket data received. Current round:', bracketData.currentRound);
             this.bracketData = bracketData;
             this.currentRound = bracketData.currentRound || 1;
             
@@ -178,7 +206,7 @@ class TournamentBracketAmericano {
             
             this.updateButtonStates();
           } else {
-            console.log('No bracket data found, will need to initialize');
+            console.log('No Americano bracket data found, will need to initialize');
           }
         }
       );
@@ -324,7 +352,7 @@ class TournamentBracketAmericano {
 
   async initializeBracket() {
     try {
-      console.log('Initializing new bracket data...');
+      console.log('Initializing new Americano bracket data...');
       
       // Create player standings only if players exist
       const playerStandings = Array.isArray(this.players) ? 
@@ -351,24 +379,24 @@ class TournamentBracketAmericano {
         standings: playerStandings
       };
       
-      console.log('Saving initial bracket data to Firebase...');
-      // Save to Firebase
-      await firebaseService.saveTournamentBracket(this.selectedTournamentId, bracketData);
+      console.log('Saving initial Americano bracket data to Firebase...');
+      // Save to Firebase using Americano specific method
+      await firebaseService.saveTournamentBracketAmericano(this.selectedTournamentId, bracketData);
       
-      console.log('Bracket data saved successfully');
+      console.log('Americano bracket data saved successfully');
       this.bracketData = bracketData;
       this.renderAllRounds();
       this.renderStandings();
     } catch (error) {
-      console.error('Error initializing bracket:', error);
+      console.error('Error initializing Americano bracket:', error);
       try {
         Swal.fire({
           title: 'Error',
-          text: 'Failed to initialize bracket. Please try again.',
+          text: 'Failed to initialize Americano bracket. Please try again.',
           icon: 'error'
         });
       } catch (e) {
-        alert('Error: Failed to initialize bracket. Please try again.');
+        alert('Error: Failed to initialize Americano bracket. Please try again.');
       }
     }
   }
@@ -625,28 +653,32 @@ class TournamentBracketAmericano {
       // Find the match in current rounds
       let matchUpdated = false;
       
-      for (const round of updatedBracketData.rounds) {
-        const matchIndex = round.matches.findIndex(m => m.id === matchId);
-        if (matchIndex !== -1) {
-          if (team === 'team1') {
-            round.matches[matchIndex].score1 = score;
-          } else if (team === 'team2') {
-            round.matches[matchIndex].score2 = score;
-          }
+      if (updatedBracketData && updatedBracketData.rounds) {
+        for (const round of updatedBracketData.rounds) {
+          if (!round || !Array.isArray(round.matches)) continue;
           
-          // Auto-complete if both scores are set
-          if (round.matches[matchIndex].score1 !== null && round.matches[matchIndex].score2 !== null) {
-            round.matches[matchIndex].completed = true;
+          const matchIndex = round.matches.findIndex(m => m && m.id === matchId);
+          if (matchIndex !== -1) {
+            if (team === 'team1') {
+              round.matches[matchIndex].score1 = score;
+            } else if (team === 'team2') {
+              round.matches[matchIndex].score2 = score;
+            }
+            
+            // Auto-complete if both scores are set
+            if (round.matches[matchIndex].score1 !== null && round.matches[matchIndex].score2 !== null) {
+              round.matches[matchIndex].completed = true;
+            }
+            
+            matchUpdated = true;
+            break;
           }
-          
-          matchUpdated = true;
-          break;
         }
       }
       
       if (matchUpdated) {
-        // Save to Firebase
-        await firebaseService.saveTournamentBracket(
+        // Save to Firebase using Americano specific method
+        await firebaseService.saveTournamentBracketAmericano(
           this.selectedTournamentId,
           updatedBracketData
         );
@@ -655,46 +687,63 @@ class TournamentBracketAmericano {
       }
     } catch (error) {
       console.error('Error updating match score:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to update score. Please try again.',
-        icon: 'error'
-      });
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to update score. Please try again.',
+          icon: 'error'
+        });
+      } catch (e) {
+        alert('Error: Failed to update score. Please try again.');
+      }
     }
   }
   
   async saveScores() {
     try {
-      await firebaseService.saveTournamentBracket(
+      await firebaseService.saveTournamentBracketAmericano(
         this.selectedTournamentId,
         this.bracketData
       );
       
-      Swal.fire({
-        title: 'Scores Saved',
-        text: 'Scores saved successfully!',
-        icon: 'success',
-        timer: 1500
-      });
+      try {
+        Swal.fire({
+          title: 'Scores Saved',
+          text: 'Scores saved successfully!',
+          icon: 'success',
+          timer: 1500
+        });
+      } catch (e) {
+        alert('Scores saved successfully!');
+      }
     } catch (error) {
       console.error('Error saving scores:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to save scores. Please try again.',
-        icon: 'error'
-      });
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to save scores. Please try again.',
+          icon: 'error'
+        });
+      } catch (e) {
+        alert('Error: Failed to save scores. Please try again.');
+      }
     }
   }
   
   async resetScores() {
-    const result = await Swal.fire({
-      title: 'Reset Scores?',
-      text: 'Are you sure you want to reset all scores for the current round?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, reset scores',
-      cancelButtonText: 'Cancel'
-    });
+    let result = false;
+    try {
+      result = await Swal.fire({
+        title: 'Reset Scores?',
+        text: 'Are you sure you want to reset all scores for the current round?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, reset scores',
+        cancelButtonText: 'Cancel'
+      });
+    } catch (e) {
+      result = { isConfirmed: confirm('Are you sure you want to reset all scores for the current round?') };
+    }
     
     if (!result.isConfirmed) return;
     
@@ -702,49 +751,66 @@ class TournamentBracketAmericano {
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
       
-      const currentRoundData = updatedBracketData.rounds.find(r => r.number === this.currentRound);
-      if (currentRoundData) {
-        currentRoundData.matches.forEach(match => {
-          match.score1 = null;
-          match.score2 = null;
-          match.completed = false;
-        });
-        
-        // Save to Firebase
-        await firebaseService.saveTournamentBracket(
-          this.selectedTournamentId,
-          updatedBracketData
-        );
+      if (updatedBracketData && updatedBracketData.rounds) {
+        const currentRoundData = updatedBracketData.rounds.find(r => r && r.number === this.currentRound);
+        if (currentRoundData && Array.isArray(currentRoundData.matches)) {
+          currentRoundData.matches.forEach(match => {
+            if (match) {
+              match.score1 = null;
+              match.score2 = null;
+              match.completed = false;
+            }
+          });
+          
+          // Save to Firebase using Americano specific method
+          await firebaseService.saveTournamentBracketAmericano(
+            this.selectedTournamentId,
+            updatedBracketData
+          );
+        }
       }
     } catch (error) {
       console.error('Error resetting scores:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to reset scores. Please try again.',
-        icon: 'error'
-      });
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to reset scores. Please try again.',
+          icon: 'error'
+        });
+      } catch (e) {
+        alert('Error: Failed to reset scores. Please try again.');
+      }
     }
   }
   
   async completeRound() {
-    const result = await Swal.fire({
-      title: 'Complete Round?',
-      text: `Are you sure you want to complete Round ${this.currentRound}?`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, complete round',
-      cancelButtonText: 'Cancel'
-    });
+    let result = false;
+    try {
+      result = await Swal.fire({
+        title: 'Complete Round?',
+        text: `Are you sure you want to complete Round ${this.currentRound}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, complete round',
+        cancelButtonText: 'Cancel'
+      });
+    } catch (e) {
+      result = { isConfirmed: confirm(`Are you sure you want to complete Round ${this.currentRound}?`) };
+    }
     
     if (!result.isConfirmed) return;
     
     const isCurrentRoundComplete = this.checkRoundCompletion(this.currentRound);
     if (!isCurrentRoundComplete) {
-      Swal.fire({
-        title: 'Incomplete Round',
-        text: 'Please enter scores for all matches in the current round before completing.',
-        icon: 'warning'
-      });
+      try {
+        Swal.fire({
+          title: 'Incomplete Round',
+          text: 'Please enter scores for all matches in the current round before completing.',
+          icon: 'warning'
+        });
+      } catch (e) {
+        alert('Incomplete Round: Please enter scores for all matches in the current round before completing.');
+      }
       return;
     }
     
@@ -752,47 +818,65 @@ class TournamentBracketAmericano {
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
       
-      const currentRoundData = updatedBracketData.rounds.find(r => r.number === this.currentRound);
-      if (currentRoundData) {
-        currentRoundData.completed = true;
-        
-        // Add matches to completed matches
-        currentRoundData.matches.forEach(match => {
-          updatedBracketData.completedMatches.push({...match});
-        });
-        
-        this.updateStandings(updatedBracketData);
-        
-        // Save to Firebase
-        await firebaseService.saveTournamentBracket(
-          this.selectedTournamentId,
-          updatedBracketData
-        );
-        
-        // Update tournament status if last round
-        if (this.currentRound >= 4) {
-          await firebaseService.updateTournament(
-            this.selectedTournamentId, 
-            {
-              status_id: 3, // Completed status
-              completedDate: firebaseService.timestamp()
-            }
+      if (updatedBracketData && updatedBracketData.rounds) {
+        const currentRoundData = updatedBracketData.rounds.find(r => r && r.number === this.currentRound);
+        if (currentRoundData) {
+          currentRoundData.completed = true;
+          
+          // Add matches to completed matches
+          if (Array.isArray(currentRoundData.matches) && !Array.isArray(updatedBracketData.completedMatches)) {
+            updatedBracketData.completedMatches = [];
+          }
+          
+          if (Array.isArray(currentRoundData.matches) && Array.isArray(updatedBracketData.completedMatches)) {
+            currentRoundData.matches.forEach(match => {
+              if (match) {
+                updatedBracketData.completedMatches.push({...match});
+              }
+            });
+          }
+          
+          this.updateStandings(updatedBracketData);
+          
+          // Save to Firebase using Americano specific method
+          await firebaseService.saveTournamentBracketAmericano(
+            this.selectedTournamentId,
+            updatedBracketData
           );
           
-          Swal.fire({
-            title: 'Tournament Completed',
-            text: 'Tournament has been successfully completed!',
-            icon: 'success'
-          });
+          // Update tournament status if last round
+          if (this.currentRound >= 4) {
+            await firebaseService.updateTournament(
+              this.selectedTournamentId, 
+              {
+                status_id: 3, // Completed status
+                completedDate: firebaseService.timestamp()
+              }
+            );
+            
+            try {
+              Swal.fire({
+                title: 'Tournament Completed',
+                text: 'Tournament has been successfully completed!',
+                icon: 'success'
+              });
+            } catch (e) {
+              alert('Tournament has been successfully completed!');
+            }
+          }
         }
       }
     } catch (error) {
       console.error('Error completing round:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to complete round. Please try again.',
-        icon: 'error'
-      });
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to complete round. Please try again.',
+          icon: 'error'
+        });
+      } catch (e) {
+        alert('Error: Failed to complete round. Please try again.');
+      }
     }
   }
   
@@ -847,14 +931,19 @@ class TournamentBracketAmericano {
   }
   
   async resetRound() {
-    const result = await Swal.fire({
-      title: 'Reset Round?',
-      text: `Are you sure you want to reset Round ${this.currentRound}?`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, reset round',
-      cancelButtonText: 'Cancel'
-    });
+    let result = false;
+    try {
+      result = await Swal.fire({
+        title: 'Reset Round?',
+        text: `Are you sure you want to reset Round ${this.currentRound}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, reset round',
+        cancelButtonText: 'Cancel'
+      });
+    } catch (e) {
+      result = { isConfirmed: confirm(`Are you sure you want to reset Round ${this.currentRound}?`) };
+    }
     
     if (!result.isConfirmed) return;
     
@@ -862,32 +951,40 @@ class TournamentBracketAmericano {
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
       
-      const currentRoundData = updatedBracketData.rounds.find(r => r.number === this.currentRound);
-      if (currentRoundData) {
-        currentRoundData.matches = [];
-        currentRoundData.completed = false;
-        
-        // Remove completed matches for this round
-        updatedBracketData.completedMatches = updatedBracketData.completedMatches.filter(
-          match => match.round !== this.currentRound
-        );
-        
-        // Reset standings (recalculate from scratch)
-        this.resetStandings(updatedBracketData);
-        
-        // Save to Firebase
-        await firebaseService.saveTournamentBracket(
-          this.selectedTournamentId,
-          updatedBracketData
-        );
+      if (updatedBracketData && updatedBracketData.rounds) {
+        const currentRoundData = updatedBracketData.rounds.find(r => r && r.number === this.currentRound);
+        if (currentRoundData) {
+          currentRoundData.matches = [];
+          currentRoundData.completed = false;
+          
+          // Remove completed matches for this round
+          if (Array.isArray(updatedBracketData.completedMatches)) {
+            updatedBracketData.completedMatches = updatedBracketData.completedMatches.filter(
+              match => match && match.round !== this.currentRound
+            );
+          }
+          
+          // Reset standings (recalculate from scratch)
+          this.resetStandings(updatedBracketData);
+          
+          // Save to Firebase using Americano specific method
+          await firebaseService.saveTournamentBracketAmericano(
+            this.selectedTournamentId,
+            updatedBracketData
+          );
+        }
       }
     } catch (error) {
       console.error('Error resetting round:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to reset round. Please try again.',
-        icon: 'error'
-      });
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to reset round. Please try again.',
+          icon: 'error'
+        });
+      } catch (e) {
+        alert('Error: Failed to reset round. Please try again.');
+      }
     }
   }
   
@@ -959,45 +1056,63 @@ class TournamentBracketAmericano {
   }
 
   async generateNextRound() {
-    const result = await Swal.fire({
-      title: 'Generate Next Round?',
-      text: `Are you sure you want to generate Round ${this.currentRound + 1}?`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, generate next round',
-      cancelButtonText: 'Cancel'
-    });
+    let result = false;
+    try {
+      result = await Swal.fire({
+        title: 'Generate Next Round?',
+        text: `Are you sure you want to generate Round ${this.currentRound + 1}?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, generate next round',
+        cancelButtonText: 'Cancel'
+      });
+    } catch (e) {
+      result = { isConfirmed: confirm(`Are you sure you want to generate Round ${this.currentRound + 1}?`) };
+    }
     
     if (!result.isConfirmed) return;
     
     if (this.currentRound >= 4) {
-      Swal.fire({
-        title: 'Tournament Complete',
-        text: 'Tournament has reached maximum number of rounds.',
-        icon: 'info'
-      });
+      try {
+        Swal.fire({
+          title: 'Tournament Complete',
+          text: 'Tournament has reached maximum number of rounds.',
+          icon: 'info'
+        });
+      } catch (e) {
+        alert('Tournament has reached maximum number of rounds.');
+      }
       return;
     }
     
     // Check if current round is completed
     const isCurrentRoundComplete = this.checkRoundCompletion(this.currentRound);
     if (!isCurrentRoundComplete) {
-      Swal.fire({
-        title: 'Incomplete Round',
-        text: 'Please complete all matches in the current round before generating the next round.',
-        icon: 'warning'
-      });
+      try {
+        Swal.fire({
+          title: 'Incomplete Round',
+          text: 'Please complete all matches in the current round before generating the next round.',
+          icon: 'warning'
+        });
+      } catch (e) {
+        alert('Please complete all matches in the current round before generating the next round.');
+      }
       return;
     }
     
     try {
-      Swal.fire({
-        title: 'Generating next round...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
+      let loadingDialog = null;
+      try {
+        loadingDialog = Swal.fire({
+          title: 'Generating next round...',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+      } catch (e) {
+        console.log('Generating next round...');
+      }
       
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
@@ -1018,24 +1133,35 @@ class TournamentBracketAmericano {
         this.generateRegularRound(updatedBracketData, this.currentRound);
       }
       
-      // Save to Firebase
-      await firebaseService.saveTournamentBracket(
+      // Save to Firebase using Americano specific method
+      await firebaseService.saveTournamentBracketAmericano(
         this.selectedTournamentId,
         updatedBracketData
       );
       
-      Swal.close();
+      try {
+        if (loadingDialog) Swal.close();
+      } catch (e) {
+        console.log('Next round generated successfully');
+      }
       
       // Reset timer
       this.gameTimer.reset();
     } catch (error) {
-      Swal.close();
+      try {
+        Swal.close();
+      } catch (e) {}
+      
       console.error('Error generating next round:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to generate next round. Please try again.',
-        icon: 'error'
-      });
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to generate next round. Please try again.',
+          icon: 'error'
+        });
+      } catch (e) {
+        alert('Error: Failed to generate next round. Please try again.');
+      }
     }
   }
   

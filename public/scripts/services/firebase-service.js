@@ -27,7 +27,8 @@ class FirebaseService {
     this.collections = {
       PLAYERS: 'players',
       TOURNAMENTS: 'tournaments',
-      BRACKETS: 'brackets'
+      BRACKETS: 'brackets',
+      BRACKETS_AMERICANO: 'brackets_americano'  // New collection for Americano format
     };
   }
 
@@ -266,10 +267,10 @@ class FirebaseService {
     }
   }
   
-  // ------ TOURNAMENT BRACKETS ------
+  // ------ TOURNAMENT BRACKETS (MEXICANO FORMAT) ------
   
   /**
-   * Get a tournament bracket
+   * Get a tournament bracket (Mexicano format)
    * @param {string} tournamentId - The tournament's ID
    * @returns {Promise<Object|null>} Bracket data or null if not found
    */
@@ -293,7 +294,7 @@ class FirebaseService {
   }
   
   /**
-   * Save tournament bracket data
+   * Save tournament bracket data (Mexicano format)
    * @param {string} tournamentId - The tournament's ID
    * @param {Object} bracketData - The bracket data to save
    * @returns {Promise<boolean>} Success indicator
@@ -310,6 +311,88 @@ class FirebaseService {
       console.error('Error saving tournament bracket:', error);
       throw error;
     }
+  }
+
+  // ------ TOURNAMENT BRACKETS (AMERICANO FORMAT) ------
+  
+  /**
+   * Get a tournament bracket for Americano format
+   * @param {string} tournamentId - The tournament's ID
+   * @returns {Promise<Object|null>} Bracket data or null if not found
+   */
+  async getTournamentBracketAmericano(tournamentId) {
+    try {
+      console.log(`Getting Americano bracket for tournament: ${tournamentId}`);
+      const docRef = doc(db, this.collections.BRACKETS_AMERICANO, tournamentId);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        console.log('No Americano bracket found for this tournament');
+        return null;
+      }
+      
+      const data = {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+      console.log('Retrieved Americano bracket data:', data);
+      
+      return data;
+    } catch (error) {
+      console.error('Error getting Americano tournament bracket:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Save tournament bracket data for Americano format
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Object} bracketData - The bracket data to save
+   * @returns {Promise<boolean>} Success indicator
+   */
+  async saveTournamentBracketAmericano(tournamentId, bracketData) {
+    try {
+      console.log(`Saving Americano bracket for tournament: ${tournamentId}`);
+      console.log('Bracket data to save:', bracketData);
+      
+      const bracketRef = doc(db, this.collections.BRACKETS_AMERICANO, tournamentId);
+      await setDoc(bracketRef, {
+        ...bracketData,
+        updated_at: serverTimestamp()
+      }, { merge: true });
+      
+      console.log('Americano bracket saved successfully');
+      return true;
+    } catch (error) {
+      console.error('Error saving Americano tournament bracket:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Listen for changes to an Americano tournament bracket
+   * @param {string} tournamentId - The tournament's ID
+   * @param {Function} callback - Function to call with updated data
+   * @returns {Function} Unsubscribe function
+   */
+  listenToTournamentBracketAmericano(tournamentId, callback) {
+    console.log(`Setting up listener for Americano bracket: ${tournamentId}`);
+    const docRef = doc(db, this.collections.BRACKETS_AMERICANO, tournamentId);
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+        console.log('Americano bracket data updated:', data);
+        callback(data);
+      } else {
+        console.log('No Americano bracket document exists');
+        callback(null);
+      }
+    }, error => {
+      console.error('Error listening to Americano tournament bracket:', error);
+    });
   }
   
   // ------ TOURNAMENT PLAYERS ------
@@ -380,7 +463,7 @@ class FirebaseService {
   }
   
   /**
-   * Listen for changes to a tournament bracket
+   * Listen for changes to a tournament bracket (Mexicano format)
    * @param {string} tournamentId - The tournament's ID
    * @param {Function} callback - Function to call with updated data
    * @returns {Function} Unsubscribe function
