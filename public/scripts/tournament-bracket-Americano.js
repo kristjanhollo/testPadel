@@ -1113,6 +1113,9 @@ class TournamentBracketAmericano {
       } catch (e) {
         console.log('Generating next round...');
       }
+
+      console.log(`Generating round ${this.currentRound}`);
+      console.log(`Player count: ${this.players.length}`);
       
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
@@ -1128,7 +1131,21 @@ class TournamentBracketAmericano {
       if (this.currentRound === 2) {
         this.generateRegularRound(updatedBracketData, this.currentRound);
       } else if (this.currentRound === 3) {
+        console.log("Generating mix round");
+        // Log the player groups before generating
+        const greenPlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'green');
+        const bluePlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'blue');
+        const yellowPlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'yellow');
+        const pinkPlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'pink');
+        
+        console.log("Player distribution before mix round:");
+        console.log(`Green: ${greenPlayers.length}, Blue: ${bluePlayers.length}, Yellow: ${yellowPlayers.length}, Pink: ${pinkPlayers.length}`);
+        
         this.generateMixRound(updatedBracketData);
+        
+        // Log the matches created
+        const roundData = updatedBracketData.rounds.find(r => r.number === 3);
+        console.log(`Created ${roundData?.matches?.length || 0} matches for mix round`);
       } else if (this.currentRound === 4) {
         this.generateRegularRound(updatedBracketData, this.currentRound);
       }
