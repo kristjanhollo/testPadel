@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padel Bandeja - Americano Tournament</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/tournament-bracket-Americano.css">
+</head>
+<body>
+    <div class="container">
+        <header class="tournament-header">
+            <h1>Padel Bandeja</h1>
+            <p id="tournamentName">Tournament Bracket - Americano</p>
+        </header>
+
+        <!-- Timer Display -->
+        <div id="gameTimer" class="game-timer">20:00</div>
+
+        <!-- Tournament Controls -->
+        <div class="controls-section">
+            <div class="control-buttons">
+                <button id="startTimer" class="btn-primary">Start Timer</button>
+                <button id="resetRound" class="btn-secondary">Reset Round</button>
+                <button id="completeRound" class="btn-success">Complete Round</button>
+            </div>
+            <div class="action-buttons">
+                <button id="saveScores" class="btn-primary">Save</button>
+                <button id="resetScores" class="btn-warning">Reset Scores</button>
+                <button id="generateNextRound" class="btn-danger">New Round</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="tournament-content">
+            <!-- Main Section -->
+            <div class="main-section">
+                <!-- Rounds Container -->
+                <div class="rounds-container">
+                    <!-- Round 1 -->
+                    <div class="round-section">
+                        <div class="round-header">Round 1</div>
+                        <div class="courts-container" id="round1Courts">
+                            <!-- Courts will be populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Round 2 -->
+                    <div class="round-section">
+                        <div class="round-header">Round 2</div>
+                        <div class="courts-container" id="round2Courts">
+                            <!-- Courts will be populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Round 3 (Mix) -->
+                    <div class="round-section">
+                        <div class="round-header">Round 3 (Mix)</div>
+                        <div class="courts-container" id="round3Courts">
+                            <!-- Courts will be populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Round 4 -->
+                    <div class="round-section">
+                        <div class="round-header">Round 4</div>
+                        <div class="courts-container" id="round4Courts">
+                            <!-- Courts will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side Section: Standings -->
+            <div class="standings-section">
+                <h3>Current Standings</h3>
+                
+                <!-- Green Group -->
+                <div class="group-standings green-group">
+                    <div class="group-header">Green Group (Padel Arenas)</div>
+                    <div class="group-players" id="greenGroupPlayers">
+                        <!-- Players will be populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Blue Group -->
+                <div class="group-standings blue-group">
+                    <div class="group-header">Blue Group (Coolbet)</div>
+                    <div class="group-players" id="blueGroupPlayers">
+                        <!-- Players will be populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Yellow Group -->
+                <div class="group-standings yellow-group">
+                    <div class="group-header">Yellow Group (Lux Express)</div>
+                    <div class="group-players" id="yellowGroupPlayers">
+                        <!-- Players will be populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Pink Group -->
+                <div class="group-standings pink-group">
+                    <div class="group-header">Pink Group (3p Logistics)</div>
+                    <div class="group-players" id="pinkGroupPlayers">
+                        <!-- Players will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <nav class="navigation">
+            <a href="tournament-list.html" class="nav-link">Back to Tournaments</a>
+            <a href="tournament-management.html" class="nav-link">Tournament Management</a>
+            <a href="player-rankings.html" class="nav-link">Player Rankings</a>
+        </nav>
+    </div>
+
+    <!-- Template for court card -->
+    <template id="courtCardTemplate">
+        <div class="court-card">
+            <div class="court-header"></div>
+            <div class="match-teams">
+                <div class="team-row">
+                    <span class="team-name"></span>
+                    <input type="number" class="score-input" min="0" max="20">
+                </div>
+                <div class="team-row">
+                    <span class="team-name"></span>
+                    <input type="number" class="score-input" min="0" max="20">
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Template for player ranking entry -->
+    <template id="playerRankingTemplate">
+        <div class="player-ranking">
+            <span class="player-rank"></span>
+            <span class="player-name"></span>
+            <span class="player-points"></span>
+        </div>
+    </template>
+
+    <script src="scripts/services/rating-service.js"></script>
+    <script src="scripts/tournament-bracket-Americano.js"></script>
+</body>
+</html>

@@ -454,7 +454,7 @@ class TournamentManager {
       
       // Navigate to appropriate bracket view
       window.location.href = this.tournamentData.format === 'Americano' 
-        ? 'tournament-bracket.html' 
+        ? 'tournament-bracket-Americano.html' 
         : 'tournament-bracket-M.html';
         
     } catch (error) {
