@@ -1242,9 +1242,16 @@ class TournamentBracketAmericano {
       pink: this.sortPlayersByStandings(groupedPlayers.pink, bracketData)
     };
     
+    console.log("Sorted groups for mix round:", {
+      green: sortedGroups.green.length,
+      blue: sortedGroups.blue.length,
+      yellow: sortedGroups.yellow.length,
+      pink: sortedGroups.pink.length
+    });
+    
     // Create mix matches according to SNP rules
-    // Green + Blue mix
-    if (sortedGroups.green.length >= 2 && sortedGroups.blue.length >= 2) {
+    // Green + Blue mix - need at least 4 players in each group
+    if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 8) {
       // Green 1 & Blue 6 vs Green 2 & Blue 5
       this.createMixMatch(
         roundData,
@@ -1262,10 +1269,28 @@ class TournamentBracketAmericano {
         'Mix Round',
         'mix'
       );
+    } else if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 4) {
+      // Alternative pairing if we don't have enough blue players
+      console.log("Using alternative pairing for Green+Blue (limited players)");
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.green[0], sortedGroups.blue[3]],
+        [sortedGroups.green[1], sortedGroups.blue[2]],
+        'Mix Round',
+        'mix'
+      );
+      
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.green[2], sortedGroups.blue[1]],
+        [sortedGroups.green[3], sortedGroups.blue[0]],
+        'Mix Round',
+        'mix'
+      );
     }
     
-    // Yellow + Pink mix
-    if (sortedGroups.yellow.length >= 2 && sortedGroups.pink.length >= 2) {
+    // Yellow + Pink mix - need at least 4 players in each group
+    if (sortedGroups.yellow.length >= 4 && sortedGroups.pink.length >= 4) {
       // Yellow 9 & Pink 16 vs Yellow 10 & Pink 15
       this.createMixMatch(
         roundData,
@@ -1284,6 +1309,48 @@ class TournamentBracketAmericano {
         'mix'
       );
     }
+    
+    // If we still don't have enough matches, create some mixed ones with available players
+    if (roundData.matches.length < 4) {
+      console.log("Not enough matches created, creating additional mixed matches");
+      
+      // Collect all remaining players and create additional matches
+      const allAvailablePlayers = [
+        ...sortedGroups.green, 
+        ...sortedGroups.blue,
+        ...sortedGroups.yellow,
+        ...sortedGroups.pink
+      ];
+      
+      // Filter out players already assigned to matches
+      const usedPlayers = new Set();
+      roundData.matches.forEach(match => {
+        match.team1.forEach(p => usedPlayers.add(p.id));
+        match.team2.forEach(p => usedPlayers.add(p.id));
+      });
+      
+      const availablePlayers = allAvailablePlayers.filter(p => !usedPlayers.has(p.id));
+      console.log(`Found ${availablePlayers.length} available players for additional matches`);
+      
+      // Sort by rating for balanced teams
+      availablePlayers.sort((a, b) => b.rating - a.rating);
+      
+      // Create additional matches with remaining players
+      while (availablePlayers.length >= 4 && roundData.matches.length < 4) {
+        const team1 = [availablePlayers.shift(), availablePlayers.shift()];
+        const team2 = [availablePlayers.shift(), availablePlayers.shift()];
+        
+        this.createMixMatch(
+          roundData,
+          team1,
+          team2,
+          'Mix Round',
+          'mix'
+        );
+      }
+    }
+    
+    console.log(`Generated ${roundData.matches.length} mix round matches`);
   }
   
   createMixMatch(roundData, team1, team2, courtName, groupColor) {
