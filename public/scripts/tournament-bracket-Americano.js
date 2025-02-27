@@ -191,6 +191,7 @@ class TournamentBracketAmericano {
             this.bracketData = bracketData;
             this.currentRound = bracketData.currentRound || 1;
             
+            console.log(bracketData.rounds);
             // Only render if the bracket data has the expected structure
             if (bracketData.rounds) {
               this.renderAllRounds();
