@@ -417,44 +417,108 @@ renderRoundContent(roundNumber) {
   });
 }
   
-  makeScoreEditable(element, matchId, scoreType) {
-    // Check if we're already editing this score
-    if (element.querySelector('.score-input')) {
-      return;
-    }
-    
-    const currentScore = element.textContent !== '-' ? element.textContent : '';
-    
-    // Create input element
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.className = 'score-input';
-    input.value = currentScore;
-    input.min = 0;
-    input.max = 10;
-  
-    // Store original text for restoration if needed
-    const originalText = element.textContent;
-    
-    // Style the parent element to indicate editing mode
-    element.classList.add('editing');
-    
-    // Add input handlers
-    input.onblur = () => {
-      this.handleScoreUpdate(element, input, matchId, scoreType, originalText);
-    };
-  
-    input.onkeypress = (e) => {
-      if (e.key === 'Enter') {
-        input.blur();
-      }
-    };
-  
-    // Clear text and add input
-    element.textContent = '';
-    element.appendChild(input);
-    input.focus();
+makeScoreEditable(element, matchId, scoreType) {
+  // Check if we're already editing this score
+  if (element.querySelector('.score-input')) {
+    return;
   }
+  
+  const currentScore = element.textContent.trim() !== '-' ? element.textContent.trim() : '';
+  
+  // Create input element
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'score-input';
+  input.value = currentScore;
+  input.min = 0;
+  input.max = 10;
+
+  // Store original text for restoration if needed
+  const originalText = element.textContent;
+  
+  // Style the parent element to indicate editing mode
+  element.classList.add('editing');
+  
+  // Add blur handler to save the value
+  input.onblur = () => {
+    this.handleScoreUpdate(element, input, matchId, scoreType, originalText);
+  };
+
+  // Use keyup instead of oninput for more controlled behavior
+  input.onkeyup = (e) => {
+    // Only proceed on number keys, backspace, or delete
+    const validKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'Backspace', 'Delete'];
+    if (!validKeys.includes(e.key)) return;
+    
+    const value = parseInt(input.value);
+    // Check if we have a valid score (0-10)
+    if (!isNaN(value) && value >= 0 && value <= 10) {
+      // If there's another character being typed, don't advance yet
+      if (input.value.length < 2 && (value === 0 || value > 7)) {
+        // User probably entering a second digit, don't advance yet
+        return;
+      }
+      
+      // Find next score element to edit
+      const nextScoreElement = this.findNextScoreElement(element, matchId, scoreType);
+      if (nextScoreElement) {
+        // Slight delay to ensure the current input is processed
+        setTimeout(() => {
+          input.blur(); // This will trigger saving via onblur
+          
+          // Small delay before focusing the next input
+          setTimeout(() => {
+            this.makeScoreEditable(
+              nextScoreElement, 
+              nextScoreElement.dataset.matchId, 
+              nextScoreElement.dataset.scoreType
+            );
+          }, 100);
+        }, 200);
+      }
+    }
+  };
+
+  // Handle Enter key
+  input.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      input.blur();
+    }
+  };
+
+  // Clear text and add input
+  element.textContent = '';
+  element.appendChild(input);
+  input.focus();
+}
+
+// Improved method to find the next score element
+findNextScoreElement(currentElement, currentMatchId, currentScoreType) {
+  // If we're on score1, try to find score2 in the same match first
+  if (currentScoreType === 'score1') {
+    // Look for the score2 element in the same match
+    const scoreElements = document.querySelectorAll('.team-score[data-match-id="' + currentMatchId + '"]');
+    for (let el of scoreElements) {
+      if (el.dataset.scoreType === 'score2') {
+        return el;
+      }
+    }
+  }
+  
+  // If we're on score2 or didn't find a score2, find the next match
+  // Get all score elements in DOM order
+  const allScoreElements = document.querySelectorAll('.team-score');
+  const allScoreArray = Array.from(allScoreElements);
+  
+  // Find current element's index
+  const currentIndex = allScoreArray.indexOf(currentElement);
+  if (currentIndex === -1 || currentIndex === allScoreArray.length - 1) {
+    return null; // Not found or last element
+  }
+  
+  // Return the next element (which should be the next match's score1)
+  return allScoreArray[currentIndex + 1];
+}
   
   // Create game timer
   createGameTimer() {
@@ -962,6 +1026,7 @@ renderRoundContent(roundNumber) {
       element.classList.add('score-updated');
       element.textContent = score ?? '-';
       
+      console.log('editing');
       // Remove the visual feedback after a short delay
       setTimeout(() => {
         element.classList.remove('score-updated');
