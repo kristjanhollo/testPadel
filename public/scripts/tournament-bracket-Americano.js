@@ -1,5 +1,4 @@
-// Import dependencies and styles
-import '../styles/tournament-bracket-Americano.css';
+
 import firebaseService from './services/firebase-service';
 
 // Check if SweetAlert is available globally, otherwise use basic alerts
