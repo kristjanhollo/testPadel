@@ -165,19 +165,48 @@ class TournamentCreator {
   }
   
   async initializeTournamentBracket(tournamentId, format) {
-    // Create initial bracket structure based on format
-    const bracketData = {
-      format: format,
-      currentRound: 0,
-      courts: DEFAULT_COURTS.map(courtName => ({
-        name: courtName,
-        matches: [],
-      })),
-      completedMatches: [],
-      standings: []
-    };
-    
-    await window.firebaseService.saveTournamentBracket(tournamentId, bracketData);
+    try {
+      console.log(`Initializing bracket for tournament: ${tournamentId}, format: ${format}`);
+      
+      if (format === TOURNAMENT_FORMATS.AMERICANO) {
+        // Create initial Americano bracket structure
+        const americanoBracketData = {
+          format: format,
+          currentRound: 0,
+          rounds: [
+            { number: 1, completed: false, matches: [] },
+            { number: 2, completed: false, matches: [] },
+            { number: 3, completed: false, matches: [] },
+            { number: 4, completed: false, matches: [] }
+          ],
+          completedMatches: [],
+          standings: []
+        };
+        
+        console.log('Saving Americano bracket data to brackets_americano collection');
+        await window.firebaseService.saveTournamentBracketAmericano(tournamentId, americanoBracketData);
+      } else {
+        // Create initial Mexicano or other format bracket structure
+        const bracketData = {
+          format: format,
+          currentRound: 0,
+          courts: DEFAULT_COURTS.map(courtName => ({
+            name: courtName,
+            matches: [],
+          })),
+          completedMatches: [],
+          standings: []
+        };
+        
+        console.log('Saving bracket data to brackets collection');
+        await window.firebaseService.saveTournamentBracket(tournamentId, bracketData);
+      }
+      
+      console.log('Bracket data initialized successfully');
+    } catch (error) {
+      console.error('Error initializing tournament bracket:', error);
+      throw error;
+    }
   }
 
   handleFormatChange() {
