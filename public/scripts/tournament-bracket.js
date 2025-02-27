@@ -1326,58 +1326,19 @@ window.makeScoreEditable = function (element, matchId, scoreType) {
   input.className = 'score-input';
   input.value = element.textContent !== '-' ? element.textContent : '';
   input.min = 0;
-  input.max = 10;
-  
-  // Save score and focus next field
-  const saveAndFocusNext = () => {
-    const score = input.value ? parseInt(input.value) : null;
-    updateMatchScore(matchId, scoreType, score);
-    element.textContent = score ?? '-';
-    
-    // Find next score field
-    const allScoreElements = Array.from(document.querySelectorAll('.score'));
-    const currentIndex = allScoreElements.indexOf(element);
-    if (currentIndex < allScoreElements.length - 1) {
-      const nextElement = allScoreElements[currentIndex + 1];
-      
-      // Extract match ID and score type from the next element
-      let nextMatchId = matchId;
-      let nextScoreType = scoreType === 'score1' ? 'score2' : 'score1';
-      
-      // If the next element has data attributes, use those
-      if (nextElement.dataset.matchId) {
-        nextMatchId = nextElement.dataset.matchId;
-        nextScoreType = nextElement.dataset.scoreType;
-      } else if (nextElement.getAttribute('onclick')) {
-        // Try to extract from onclick attribute
-        const onclickAttr = nextElement.getAttribute('onclick');
-        const matches = onclickAttr.match(/makeScoreEditable\(this,\s*'([^']+)',\s*'([^']+)'\)/);
-        if (matches && matches.length >= 3) {
-          nextMatchId = matches[1];
-          nextScoreType = matches[2];
-        }
-      }
-      
-      // Call makeScoreEditable on the next element
-      window.makeScoreEditable(nextElement, nextMatchId, nextScoreType);
-    }
-  };
-  
-  // Handle Enter key for navigation
-  input.onkeydown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      saveAndFocusNext();
-    }
-  };
-  
-  // Save score when input loses focus
+
   input.onblur = () => {
     const score = input.value ? parseInt(input.value) : null;
     updateMatchScore(matchId, scoreType, score);
     element.textContent = score ?? '-';
   };
-  
+
+  input.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      input.blur();
+    }
+  };
+
   element.textContent = '';
   element.appendChild(input);
   input.focus();
@@ -1434,3 +1395,4 @@ formatSelect.addEventListener('change', (e) => {
 
 //generateFirstRound();
 //renderRegisteredPlayers();
+
