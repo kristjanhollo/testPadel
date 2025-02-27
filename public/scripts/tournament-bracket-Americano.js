@@ -41,11 +41,6 @@ class TournamentBracketAmericano {
     // DOM Elements
     this.timerDisplay = document.getElementById('gameTimer');
     this.startTimerBtn = document.getElementById('startTimer');
-    this.resetRoundBtn = document.getElementById('resetRound');
-    this.completeRoundBtn = document.getElementById('completeRound');
-    this.saveScoresBtn = document.getElementById('saveScores');
-    this.resetScoresBtn = document.getElementById('resetScores');
-    this.generateNextRoundBtn = document.getElementById('generateNextRound');
     
     this.tournamentNameElement = document.getElementById('tournamentName');
     this.round1Courts = document.getElementById('round1Courts');
@@ -123,15 +118,13 @@ class TournamentBracketAmericano {
         await this.initializeBracket();
       } else {
         this.currentRound = this.bracketData.currentRound || 1;
+        this.createAllRounds(this.bracketData);
         this.renderAllRounds();
         this.renderStandings();
       }
       
       // Set up event listeners
       this.setupEventListeners();
-      
-      // Update button states
-      this.updateButtonStates();
       
       console.log('Tournament bracket initialized successfully');
     } catch (error) {
@@ -191,7 +184,6 @@ class TournamentBracketAmericano {
             this.bracketData = bracketData;
             this.currentRound = bracketData.currentRound || 1;
             
-            console.log(bracketData.rounds);
             // Only render if the bracket data has the expected structure
             if (bracketData.rounds) {
               this.renderAllRounds();
@@ -204,8 +196,6 @@ class TournamentBracketAmericano {
             } else {
               console.warn('Bracket data missing standings property');
             }
-            
-            this.updateButtonStates();
           } else {
             console.log('No Americano bracket data found, will need to initialize');
           }
@@ -253,20 +243,15 @@ class TournamentBracketAmericano {
   
   setupEventListeners() {
     // Timer controls
-    this.startTimerBtn.addEventListener('click', () => {
-      if (this.gameTimer.isRunning) {
-        this.gameTimer.reset();
-      } else {
-        this.gameTimer.start();
-      }
-    });
-    
-    // Round management
-    this.resetRoundBtn.addEventListener('click', () => this.resetRound());
-    this.completeRoundBtn.addEventListener('click', () => this.completeRound());
-    this.saveScoresBtn.addEventListener('click', () => this.saveScores());
-    this.resetScoresBtn.addEventListener('click', () => this.resetScores());
-    this.generateNextRoundBtn.addEventListener('click', () => this.generateNextRound());
+    if (this.startTimerBtn) {
+      this.startTimerBtn.addEventListener('click', () => {
+        if (this.gameTimer.isRunning) {
+          this.gameTimer.reset();
+        } else {
+          this.gameTimer.start();
+        }
+      });
+    }
     
     // Global function for score changes
     window.handleScoreChange = (event) => this.handleScoreChange(event);
@@ -282,7 +267,7 @@ class TournamentBracketAmericano {
       start: () => {
         if (!this.gameTimer.isRunning) {
           this.gameTimer.isRunning = true;
-          this.startTimerBtn.textContent = 'Reset Timer';
+          if (this.startTimerBtn) this.startTimerBtn.textContent = 'Reset Timer';
           
           this.gameTimer.interval = setInterval(() => {
             this.gameTimer.time--;
@@ -299,12 +284,14 @@ class TournamentBracketAmericano {
         this.gameTimer.time = 20 * 60;
         this.gameTimer.isRunning = false;
         clearInterval(this.gameTimer.interval);
-        this.startTimerBtn.textContent = 'Start Timer';
+        if (this.startTimerBtn) this.startTimerBtn.textContent = 'Start Timer';
         this.gameTimer.updateDisplay();
-        this.timerDisplay.classList.remove('time-up');
+        if (this.timerDisplay) this.timerDisplay.classList.remove('time-up');
       },
       
       updateDisplay: () => {
+        if (!this.timerDisplay) return;
+        
         const minutes = Math.floor(this.gameTimer.time / 60);
         const seconds = this.gameTimer.time % 60;
         this.timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -313,13 +300,17 @@ class TournamentBracketAmericano {
       timeUp: () => {
         clearInterval(this.gameTimer.interval);
         this.gameTimer.isRunning = false;
-        this.startTimerBtn.textContent = 'Start Timer';
-        this.timerDisplay.classList.add('time-up');
-        Swal.fire({
-          title: 'Time\'s Up!',
-          text: 'Round time is up! Please enter final scores.',
-          icon: 'info'
-        });
+        if (this.startTimerBtn) this.startTimerBtn.textContent = 'Start Timer';
+        if (this.timerDisplay) this.timerDisplay.classList.add('time-up');
+        try {
+          Swal.fire({
+            title: 'Time\'s Up!',
+            text: 'Round time is up! Please enter final scores.',
+            icon: 'info'
+          });
+        } catch (e) {
+          alert('Time\'s Up! Please enter final scores.');
+        }
       }
     };
   }
@@ -367,6 +358,7 @@ class TournamentBracketAmericano {
           losses: 0
         })) : [];
       
+      // Create the bracket data with empty rounds
       const bracketData = {
         format: 'Americano',
         currentRound: 1,
@@ -379,6 +371,9 @@ class TournamentBracketAmericano {
         completedMatches: [],
         standings: playerStandings
       };
+      
+      // Create matches for all rounds
+      this.createAllRounds(bracketData);
       
       console.log('Saving initial Americano bracket data to Firebase...');
       // Save to Firebase using Americano specific method
@@ -400,6 +395,231 @@ class TournamentBracketAmericano {
         alert('Error: Failed to initialize Americano bracket. Please try again.');
       }
     }
+  }
+
+  // Create all rounds at once
+  createAllRounds(bracketData) {
+    // Group players by their group color
+    const groupedPlayers = {
+      green: this.players.filter(p => this.determineInitialGroup(p) === 'green'),
+      blue: this.players.filter(p => this.determineInitialGroup(p) === 'blue'),
+      yellow: this.players.filter(p => this.determineInitialGroup(p) === 'yellow'),
+      pink: this.players.filter(p => this.determineInitialGroup(p) === 'pink')
+    };
+    
+    console.log("Player group counts:", {
+      green: groupedPlayers.green.length,
+      blue: groupedPlayers.blue.length,
+      yellow: groupedPlayers.yellow.length,
+      pink: groupedPlayers.pink.length
+    });
+    
+
+    
+    // Create Round 2 matches (alternate pairing: 1+2 vs 3+4)
+    this.createRoundWithPattern(bracketData, 2, groupedPlayers, [0, 1], [2, 3]);
+    
+    // Create Round 3 (mix round)
+    this.createMixRound(bracketData, groupedPlayers);
+    
+    // Create Round 4 matches (alternate pairing: 1+3 vs 2+4)
+    this.createRoundWithPattern(bracketData, 4, groupedPlayers, [0, 2], [1, 3]);
+  }
+  
+  // Helper method to create a round with a specific pattern
+  createRoundWithPattern(bracketData, roundNumber, groupedPlayers, team1Pattern, team2Pattern) {
+    const roundData = bracketData.rounds.find(r => r.number === roundNumber);
+    if (!roundData) return;
+    
+    const courtNames = {
+      'green': 'Padel Arenas',
+      'blue': 'Coolbet',
+      'yellow': 'Lux Express',
+      'pink': '3p Logistics'
+    };
+    
+    // For each color group, create matches
+    Object.keys(groupedPlayers).forEach(groupColor => {
+      const players = [...groupedPlayers[groupColor]];
+      
+      // Skip if we don't have enough players
+      if (players.length < 4) return;
+      
+      // Sort by rating
+      players.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      
+      // Create matches according to the pattern
+      const numMatches = Math.floor(players.length / 4);
+      for (let i = 0; i < numMatches; i++) {
+        // Get players for this match
+        const fourPlayers = players.slice(i*4, i*4+4);
+        
+        // Create teams based on the provided pattern
+        const team1 = [fourPlayers[team1Pattern[0]], fourPlayers[team1Pattern[1]]];
+        const team2 = [fourPlayers[team2Pattern[0]], fourPlayers[team2Pattern[1]]];
+        
+        // Create match object
+        const match = {
+          id: `match-${Date.now()}-${roundNumber}-${groupColor}-${i}`,
+          court: courtNames[groupColor],
+          team1: team1,
+          team2: team2,
+          score1: null,
+          score2: null,
+          completed: false,
+          round: roundNumber,
+          groupColor: groupColor
+        };
+        
+        roundData.matches.push(match);
+      }
+    });
+  }
+  
+  // Create mix round (round 3)
+  createMixRound(bracketData, groupedPlayers) {
+    const roundData = bracketData.rounds.find(r => r.number === 3);
+    if (!roundData) return;
+    
+    // Sort each group by rating
+    const sortedGroups = {};
+    Object.keys(groupedPlayers).forEach(color => {
+      sortedGroups[color] = [...groupedPlayers[color]].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    });
+    
+    console.log("Sorted groups for mix round:", {
+      green: sortedGroups.green.length,
+      blue: sortedGroups.blue.length,
+      yellow: sortedGroups.yellow.length,
+      pink: sortedGroups.pink.length
+    });
+    
+    // Green + Blue mix
+    if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 8) {
+      // Green 1 & Blue 6 vs Green 2 & Blue 5
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.green[0], sortedGroups.blue[5]],
+        [sortedGroups.green[1], sortedGroups.blue[4]],
+        'Mix Round',
+        'mix'
+      );
+      
+      // Green 3 & Blue 8 vs Green 4 & Blue 7
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.green[2], sortedGroups.blue[7]],
+        [sortedGroups.green[3], sortedGroups.blue[6]],
+        'Mix Round',
+        'mix'
+      );
+    } else if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 4) {
+      // Alternative pairing if we don't have enough blue players
+      console.log("Using alternative pairing for Green+Blue (limited players)");
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.green[0], sortedGroups.blue[3]],
+        [sortedGroups.green[1], sortedGroups.blue[2]],
+        'Mix Round',
+        'mix'
+      );
+      
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.green[2], sortedGroups.blue[1]],
+        [sortedGroups.green[3], sortedGroups.blue[0]],
+        'Mix Round',
+        'mix'
+      );
+    }
+    
+    // Yellow + Pink mix
+    if (sortedGroups.yellow.length >= 4 && sortedGroups.pink.length >= 4) {
+      // Yellow 1 & Pink 4 vs Yellow 2 & Pink 3
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.yellow[0], sortedGroups.pink[3]],
+        [sortedGroups.yellow[1], sortedGroups.pink[2]],
+        'Mix Round',
+        'mix'
+      );
+      
+      // Yellow 3 & Pink 2 vs Yellow 4 & Pink 1
+      this.createMixMatch(
+        roundData,
+        [sortedGroups.yellow[2], sortedGroups.pink[1]],
+        [sortedGroups.yellow[3], sortedGroups.pink[0]],
+        'Mix Round',
+        'mix'
+      );
+    }
+    
+    // If we still don't have enough matches, create some mixed ones with available players
+    if (roundData.matches.length < 4) {
+      console.log("Not enough matches created, creating additional mixed matches");
+      
+      // Collect all remaining players and create additional matches
+      const allAvailablePlayers = [
+        ...sortedGroups.green, 
+        ...sortedGroups.blue,
+        ...sortedGroups.yellow,
+        ...sortedGroups.pink
+      ];
+      
+      // Filter out players already assigned to matches
+      const usedPlayers = new Set();
+      roundData.matches.forEach(match => {
+        match.team1.forEach(p => usedPlayers.add(p.id));
+        match.team2.forEach(p => usedPlayers.add(p.id));
+      });
+      
+      const availablePlayers = allAvailablePlayers.filter(p => !usedPlayers.has(p.id));
+      console.log(`Found ${availablePlayers.length} available players for additional matches`);
+      
+      // Sort by rating for balanced teams
+      availablePlayers.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      
+      // Create additional matches with remaining players
+      while (availablePlayers.length >= 4 && roundData.matches.length < 4) {
+        const team1 = [availablePlayers.shift(), availablePlayers.shift()];
+        const team2 = [availablePlayers.shift(), availablePlayers.shift()];
+        
+        this.createMixMatch(
+          roundData,
+          team1,
+          team2,
+          'Mix Round',
+          'mix'
+        );
+      }
+    }
+    
+    console.log(`Generated ${roundData.matches.length} mix round matches`);
+  }
+  
+  createMixMatch(roundData, team1, team2, courtName, groupColor) {
+    // Ensure we have complete teams
+    if (!team1 || !team2 || team1.length !== 2 || team2.length !== 2) return;
+    
+    // Filter out undefined players
+    team1 = team1.filter(player => player);
+    team2 = team2.filter(player => player);
+    
+    if (team1.length !== 2 || team2.length !== 2) return;
+    
+    const match = {
+      id: `match-${Date.now()}-${roundData.number}-mix-${roundData.matches.length}`,
+      court: courtName,
+      team1: team1,
+      team2: team2,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: roundData.number,
+      groupColor: groupColor
+    };
+    
+    roundData.matches.push(match);
   }
 
   determineInitialGroup(player) {
@@ -446,7 +666,6 @@ class TournamentBracketAmericano {
     }
   }
   
-  // Render Functions
   renderAllRounds() {
     if (!this.bracketData) {
       console.warn('Cannot render rounds: No bracket data available');
@@ -505,7 +724,7 @@ class TournamentBracketAmericano {
     team1ScoreEl.value = match.score1 !== null ? match.score1 : '';
     team1ScoreEl.dataset.matchId = match.id;
     team1ScoreEl.dataset.team = 'team1';
-    team1ScoreEl.addEventListener('change', window.handleScoreChange);
+    team1ScoreEl.addEventListener('change', handleScoreChange); // Use global function here
     
     // Team 2
     const team2NameEl = teamRows[1].querySelector('.team-name');
@@ -514,7 +733,7 @@ class TournamentBracketAmericano {
     team2ScoreEl.value = match.score2 !== null ? match.score2 : '';
     team2ScoreEl.dataset.matchId = match.id;
     team2ScoreEl.dataset.team = 'team2';
-    team2ScoreEl.addEventListener('change', window.handleScoreChange);
+    team2ScoreEl.addEventListener('change', handleScoreChange); // Use global function here
     
     // If match is completed, disable inputs
     if (match.completed) {
@@ -630,270 +849,135 @@ class TournamentBracketAmericano {
       }
     });
   }
-  
+
   // Score and Match Functions
-  handleScoreChange(event) {
-    const input = event.target;
-    const matchId = input.dataset.matchId;
-    const team = input.dataset.team;
-    const score = parseInt(input.value, 10);
-    
-    if (isNaN(score) || score < 0) {
-      input.value = '';
-      return;
-    }
-    
-    this.updateMatchScore(matchId, team, score);
-  }
-  
-  async updateMatchScore(matchId, team, score) {
-    try {
-      // Create a deep copy of bracket data to modify
-      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
+    // Score and Match Functions
+    handleScoreChange(event) {
+      const input = event.target;
+      const matchId = input.dataset.matchId;
+      const team = input.dataset.team;
+      const score = parseInt(input.value, 10);
       
-      // Find the match in current rounds
-      let matchUpdated = false;
-      
-      if (updatedBracketData && updatedBracketData.rounds) {
-        for (const round of updatedBracketData.rounds) {
-          if (!round || !Array.isArray(round.matches)) continue;
-          
-          const matchIndex = round.matches.findIndex(m => m && m.id === matchId);
-          if (matchIndex !== -1) {
-            if (team === 'team1') {
-              round.matches[matchIndex].score1 = score;
-            } else if (team === 'team2') {
-              round.matches[matchIndex].score2 = score;
-            }
-            
-            // Auto-complete if both scores are set
-            if (round.matches[matchIndex].score1 !== null && round.matches[matchIndex].score2 !== null) {
-              round.matches[matchIndex].completed = true;
-            }
-            
-            matchUpdated = true;
-            break;
-          }
-        }
+      if (isNaN(score) || score < 0) {
+        input.value = '';
+        return;
       }
       
-      if (matchUpdated) {
-        // Save to Firebase using Americano specific method
-        await firebaseService.saveTournamentBracketAmericano(
-          this.selectedTournamentId,
-          updatedBracketData
-        );
+      this.updateMatchScore(matchId, team, score);
+    }
+    
+    async updateMatchScore(matchId, team, score) {
+      try {
+        // Create a deep copy of bracket data to modify
+        const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
         
-        this.updateButtonStates();
-      }
-    } catch (error) {
-      console.error('Error updating match score:', error);
-      try {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to update score. Please try again.',
-          icon: 'error'
-        });
-      } catch (e) {
-        alert('Error: Failed to update score. Please try again.');
-      }
-    }
-  }
-  
-  async saveScores() {
-    try {
-      await firebaseService.saveTournamentBracketAmericano(
-        this.selectedTournamentId,
-        this.bracketData
-      );
-      
-      try {
-        Swal.fire({
-          title: 'Scores Saved',
-          text: 'Scores saved successfully!',
-          icon: 'success',
-          timer: 1500
-        });
-      } catch (e) {
-        alert('Scores saved successfully!');
-      }
-    } catch (error) {
-      console.error('Error saving scores:', error);
-      try {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to save scores. Please try again.',
-          icon: 'error'
-        });
-      } catch (e) {
-        alert('Error: Failed to save scores. Please try again.');
-      }
-    }
-  }
-  
-  async resetScores() {
-    let result = false;
-    try {
-      result = await Swal.fire({
-        title: 'Reset Scores?',
-        text: 'Are you sure you want to reset all scores for the current round?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, reset scores',
-        cancelButtonText: 'Cancel'
-      });
-    } catch (e) {
-      result = { isConfirmed: confirm('Are you sure you want to reset all scores for the current round?') };
-    }
-    
-    if (!result.isConfirmed) return;
-    
-    try {
-      // Create a deep copy of bracket data to modify
-      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-      
-      if (updatedBracketData && updatedBracketData.rounds) {
-        const currentRoundData = updatedBracketData.rounds.find(r => r && r.number === this.currentRound);
-        if (currentRoundData && Array.isArray(currentRoundData.matches)) {
-          currentRoundData.matches.forEach(match => {
-            if (match) {
-              match.score1 = null;
-              match.score2 = null;
-              match.completed = false;
-            }
-          });
-          
-          // Save to Firebase using Americano specific method
-          await firebaseService.saveTournamentBracketAmericano(
-            this.selectedTournamentId,
-            updatedBracketData
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Error resetting scores:', error);
-      try {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to reset scores. Please try again.',
-          icon: 'error'
-        });
-      } catch (e) {
-        alert('Error: Failed to reset scores. Please try again.');
-      }
-    }
-  }
-  
-  async completeRound() {
-    let result = false;
-    try {
-      result = await Swal.fire({
-        title: 'Complete Round?',
-        text: `Are you sure you want to complete Round ${this.currentRound}?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, complete round',
-        cancelButtonText: 'Cancel'
-      });
-    } catch (e) {
-      result = { isConfirmed: confirm(`Are you sure you want to complete Round ${this.currentRound}?`) };
-    }
-    
-    if (!result.isConfirmed) return;
-    
-    const isCurrentRoundComplete = this.checkRoundCompletion(this.currentRound);
-    if (!isCurrentRoundComplete) {
-      try {
-        Swal.fire({
-          title: 'Incomplete Round',
-          text: 'Please enter scores for all matches in the current round before completing.',
-          icon: 'warning'
-        });
-      } catch (e) {
-        alert('Incomplete Round: Please enter scores for all matches in the current round before completing.');
-      }
-      return;
-    }
-    
-    try {
-      // Create a deep copy of bracket data to modify
-      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-      
-      if (updatedBracketData && updatedBracketData.rounds) {
-        const currentRoundData = updatedBracketData.rounds.find(r => r && r.number === this.currentRound);
-        if (currentRoundData) {
-          currentRoundData.completed = true;
-          
-          // Add matches to completed matches
-          if (Array.isArray(currentRoundData.matches) && !Array.isArray(updatedBracketData.completedMatches)) {
-            updatedBracketData.completedMatches = [];
-          }
-          
-          if (Array.isArray(currentRoundData.matches) && Array.isArray(updatedBracketData.completedMatches)) {
-            currentRoundData.matches.forEach(match => {
-              if (match) {
-                updatedBracketData.completedMatches.push({...match});
-              }
-            });
-          }
-          
-          this.updateStandings(updatedBracketData);
-          
-          // Save to Firebase using Americano specific method
-          await firebaseService.saveTournamentBracketAmericano(
-            this.selectedTournamentId,
-            updatedBracketData
-          );
-          
-          // Update tournament status if last round
-          if (this.currentRound >= 4) {
-            await firebaseService.updateTournament(
-              this.selectedTournamentId, 
-              {
-                status_id: 3, // Completed status
-                completedDate: firebaseService.timestamp()
-              }
-            );
+        // Find the match in any round
+        let matchUpdated = false;
+        let currentRound = null;
+        
+        if (updatedBracketData && updatedBracketData.rounds) {
+          for (const round of updatedBracketData.rounds) {
+            if (!round || !Array.isArray(round.matches)) continue;
             
+            const matchIndex = round.matches.findIndex(m => m && m.id === matchId);
+            if (matchIndex !== -1) {
+              if (team === 'team1') {
+                round.matches[matchIndex].score1 = score;
+              } else if (team === 'team2') {
+                round.matches[matchIndex].score2 = score;
+              }
+              
+              // Auto-complete if both scores are set
+              if (round.matches[matchIndex].score1 !== null && round.matches[matchIndex].score2 !== null) {
+                round.matches[matchIndex].completed = true;
+                
+                // Check if we need to update the currentRound
+                if (round.number === updatedBracketData.currentRound) {
+                  // Check if this round is completed
+                  const isRoundComplete = round.matches.every(m => m && m.completed);
+                  if (isRoundComplete && round.number < 4) {
+                    // Auto-advance to next round
+                    updatedBracketData.currentRound = round.number + 1;
+                    round.completed = true;
+                  }
+                }
+              }
+              
+              matchUpdated = true;
+              currentRound = round.number;
+              break;
+            }
+          }
+        }
+        
+        if (matchUpdated) {
+          // Add to completedMatches if the match is completed
+          if (currentRound === updatedBracketData.currentRound) {
+            const matchInRound = updatedBracketData.rounds.find(r => r && r.number === currentRound)
+              ?.matches.find(m => m && m.id === matchId);
+            
+            if (matchInRound && matchInRound.completed) {
+              // Check if not already in completedMatches
+              const existingIndex = updatedBracketData.completedMatches.findIndex(m => m && m.id === matchId);
+              if (existingIndex === -1) {
+                updatedBracketData.completedMatches.push({...matchInRound});
+              } else {
+                updatedBracketData.completedMatches[existingIndex] = {...matchInRound};
+              }
+              
+              // Update standings
+              this.updateStandingsWithMatch(updatedBracketData, matchInRound);
+            }
+          }
+          
+          // Save to Firebase using Americano specific method
+          await firebaseService.saveTournamentBracketAmericano(
+            this.selectedTournamentId,
+            updatedBracketData
+          );
+          
+          // Update the UI to reflect changes
+          this.bracketData = updatedBracketData;
+          this.currentRound = updatedBracketData.currentRound;
+          this.renderStandings();
+          this.updateCurrentRoundDisplay();
+          this.setupRoundTabs();
+          
+          // If round changed, update the view
+          if (this.currentRound !== currentRound) {
+            this.showRound(this.currentRound);
+            
+            // Notify user of round advancement
             try {
               Swal.fire({
-                title: 'Tournament Completed',
-                text: 'Tournament has been successfully completed!',
-                icon: 'success'
+                title: 'Round Complete!',
+                text: `Moving to Round ${this.currentRound}`,
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
               });
             } catch (e) {
-              alert('Tournament has been successfully completed!');
+              console.log(`Round complete! Moving to Round ${this.currentRound}`);
             }
           }
         }
-      }
-    } catch (error) {
-      console.error('Error completing round:', error);
-      try {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to complete round. Please try again.',
-          icon: 'error'
-        });
-      } catch (e) {
-        alert('Error: Failed to complete round. Please try again.');
+      } catch (error) {
+        console.error('Error updating match score:', error);
+        try {
+          Swal.fire({
+            title: 'Error',
+            text: 'Failed to update score. Please try again.',
+            icon: 'error'
+          });
+        } catch (e) {
+          alert('Error: Failed to update score. Please try again.');
+        }
       }
     }
-  }
-  
-  checkRoundCompletion(roundNumber) {
-    const roundData = this.bracketData.rounds.find(r => r.number === roundNumber);
-    if (!roundData) return false;
     
-    return roundData.matches.every(match => match.completed);
-  }
-  
-  updateStandings(bracketData) {
-    const currentRoundData = bracketData.rounds.find(r => r.number === this.currentRound);
-    if (!currentRoundData) return;
-    
-    currentRoundData.matches.forEach(match => {
-      if (!match.completed) return;
+    // Update standings for a single match
+    updateStandingsWithMatch(bracketData, match) {
+      if (!match || !match.completed || !Array.isArray(bracketData.standings)) return;
       
       // Determine winner
       const team1Won = match.score1 > match.score2;
@@ -901,615 +985,70 @@ class TournamentBracketAmericano {
       
       // Update team1 players
       match.team1.forEach(player => {
-        const standing = bracketData.standings.find(s => s.id === player.id);
-        if (standing) {
-          standing.gamesPlayed++;
-          standing.points += match.score1;
+        if (!player || !player.id) return;
+        
+        const standingIndex = bracketData.standings.findIndex(s => s && s.id === player.id);
+        if (standingIndex !== -1) {
+          const standing = bracketData.standings[standingIndex];
+          standing.gamesPlayed = (standing.gamesPlayed || 0) + 1;
+          standing.points = (standing.points || 0) + match.score1;
           
           if (team1Won) {
-            standing.wins++;
+            standing.wins = (standing.wins || 0) + 1;
           } else if (!isDraw) {
-            standing.losses++;
+            standing.losses = (standing.losses || 0) + 1;
           }
         }
       });
       
       // Update team2 players
       match.team2.forEach(player => {
-        const standing = bracketData.standings.find(s => s.id === player.id);
-        if (standing) {
-          standing.gamesPlayed++;
-          standing.points += match.score2;
+        if (!player || !player.id) return;
+        
+        const standingIndex = bracketData.standings.findIndex(s => s && s.id === player.id);
+        if (standingIndex !== -1) {
+          const standing = bracketData.standings[standingIndex];
+          standing.gamesPlayed = (standing.gamesPlayed || 0) + 1;
+          standing.points = (standing.points || 0) + match.score2;
           
           if (!team1Won && !isDraw) {
-            standing.wins++;
+            standing.wins = (standing.wins || 0) + 1;
           } else if (!isDraw) {
-            standing.losses++;
+            standing.losses = (standing.losses || 0) + 1;
           }
         }
       });
-    });
-  }
-  
-  async resetRound() {
-    let result = false;
-    try {
-      result = await Swal.fire({
-        title: 'Reset Round?',
-        text: `Are you sure you want to reset Round ${this.currentRound}?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, reset round',
-        cancelButtonText: 'Cancel'
-      });
-    } catch (e) {
-      result = { isConfirmed: confirm(`Are you sure you want to reset Round ${this.currentRound}?`) };
     }
     
-    if (!result.isConfirmed) return;
-    
-    try {
-      // Create a deep copy of bracket data to modify
-      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
+    getPlayerGroupColor(playerId, bracketData) {
+      if (!bracketData || !Array.isArray(bracketData.standings)) return 'green';
       
-      if (updatedBracketData && updatedBracketData.rounds) {
-        const currentRoundData = updatedBracketData.rounds.find(r => r && r.number === this.currentRound);
-        if (currentRoundData) {
-          currentRoundData.matches = [];
-          currentRoundData.completed = false;
-          
-          // Remove completed matches for this round
-          if (Array.isArray(updatedBracketData.completedMatches)) {
-            updatedBracketData.completedMatches = updatedBracketData.completedMatches.filter(
-              match => match && match.round !== this.currentRound
-            );
-          }
-          
-          // Reset standings (recalculate from scratch)
-          this.resetStandings(updatedBracketData);
-          
-          // Save to Firebase using Americano specific method
-          await firebaseService.saveTournamentBracketAmericano(
-            this.selectedTournamentId,
-            updatedBracketData
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Error resetting round:', error);
-      try {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to reset round. Please try again.',
-          icon: 'error'
-        });
-      } catch (e) {
-        alert('Error: Failed to reset round. Please try again.');
-      }
+      const standing = bracketData.standings.find(s => s && s.id === playerId);
+      return standing ? standing.group : this.determineInitialGroup(this.players.find(p => p && p.id === playerId));
     }
-  }
-  
-  resetStandings(bracketData) {
-    // Reset all standings
-    bracketData.standings = this.players.map(player => {
-      const existingStanding = bracketData.standings.find(s => s.id === player.id);
-      return {
-        id: player.id,
-        name: player.name,
-        group: existingStanding ? existingStanding.group : this.determineInitialGroup(player),
-        points: 0,
-        gamesPlayed: 0,
-        wins: 0,
-        losses: 0
-      };
-    });
     
-    // Recalculate based on completed matches from previous rounds
-    bracketData.completedMatches.forEach(match => {
-      // Determine winner
-      const team1Won = match.score1 > match.score2;
-      const isDraw = match.score1 === match.score2;
-      
-      // Update team1 players
-      match.team1.forEach(player => {
-        const standing = bracketData.standings.find(s => s.id === player.id);
-        if (standing) {
-          standing.gamesPlayed++;
-          standing.points += match.score1;
-          
-          if (team1Won) {
-            standing.wins++;
-          } else if (!isDraw) {
-            standing.losses++;
-          }
+    // Cleanup when leaving the page
+    cleanup() {
+      // Unsubscribe from all Firebase listeners
+      this.unsubscribeFunctions.forEach(unsubscribe => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
         }
       });
       
-      // Update team2 players
-      match.team2.forEach(player => {
-        const standing = bracketData.standings.find(s => s.id === player.id);
-        if (standing) {
-          standing.gamesPlayed++;
-          standing.points += match.score2;
-          
-          if (!team1Won && !isDraw) {
-            standing.wins++;
-          } else if (!isDraw) {
-            standing.losses++;
-          }
-        }
-      });
+      // Clear timers
+      if (this.gameTimer && this.gameTimer.interval) {
+        clearInterval(this.gameTimer.interval);
+      }
+    }
+  }
+  
+  // Initialize when DOM is ready
+  document.addEventListener('DOMContentLoaded', () => {
+    const bracketApp = new TournamentBracketAmericano();
+    
+    // Set up cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      bracketApp.cleanup();
     });
-  }
-  
-  updateButtonStates() {
-    if (!this.bracketData) return;
-    
-    const isRoundComplete = this.checkRoundCompletion(this.currentRound);
-    if (this.completeRoundBtn) {
-      this.completeRoundBtn.disabled = !isRoundComplete;
-    }
-    
-    const isLastRound = this.currentRound >= 4;
-    if (this.generateNextRoundBtn) {
-      this.generateNextRoundBtn.disabled = !isRoundComplete || isLastRound;
-    }
-  }
-
-  async generateNextRound() {
-    let result = false;
-    try {
-      result = await Swal.fire({
-        title: 'Generate Next Round?',
-        text: `Are you sure you want to generate Round ${this.currentRound + 1}?`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, generate next round',
-        cancelButtonText: 'Cancel'
-      });
-    } catch (e) {
-      result = { isConfirmed: confirm(`Are you sure you want to generate Round ${this.currentRound + 1}?`) };
-    }
-    
-    if (!result.isConfirmed) return;
-    
-    if (this.currentRound >= 4) {
-      try {
-        Swal.fire({
-          title: 'Tournament Complete',
-          text: 'Tournament has reached maximum number of rounds.',
-          icon: 'info'
-        });
-      } catch (e) {
-        alert('Tournament has reached maximum number of rounds.');
-      }
-      return;
-    }
-    
-    // Check if current round is completed
-    const isCurrentRoundComplete = this.checkRoundCompletion(this.currentRound);
-    if (!isCurrentRoundComplete) {
-      try {
-        Swal.fire({
-          title: 'Incomplete Round',
-          text: 'Please complete all matches in the current round before generating the next round.',
-          icon: 'warning'
-        });
-      } catch (e) {
-        alert('Please complete all matches in the current round before generating the next round.');
-      }
-      return;
-    }
-    
-    try {
-      let loadingDialog = null;
-      try {
-        loadingDialog = Swal.fire({
-          title: 'Generating next round...',
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
-        });
-      } catch (e) {
-        console.log('Generating next round...');
-      }
-
-      console.log(`Generating round ${this.currentRound}`);
-      console.log(`Player count: ${this.players.length}`);
-      
-      // Create a deep copy of bracket data to modify
-      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-      
-      // Update standings based on current round results
-      this.updateStandings(updatedBracketData);
-      
-      // Increment the current round
-      updatedBracketData.currentRound++;
-      this.currentRound = updatedBracketData.currentRound;
-      
-      // Generate next round matches
-      if (this.currentRound === 2) {
-        this.generateRegularRound(updatedBracketData, this.currentRound);
-      } else if (this.currentRound === 3) {
-        console.log("Generating mix round");
-        // Log the player groups before generating
-        const greenPlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'green');
-        const bluePlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'blue');
-        const yellowPlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'yellow');
-        const pinkPlayers = this.players.filter(p => this.getPlayerGroupColor(p.id, updatedBracketData) === 'pink');
-        
-        console.log("Player distribution before mix round:");
-        console.log(`Green: ${greenPlayers.length}, Blue: ${bluePlayers.length}, Yellow: ${yellowPlayers.length}, Pink: ${pinkPlayers.length}`);
-        
-        this.generateMixRound(updatedBracketData);
-        
-        // Log the matches created
-        const roundData = updatedBracketData.rounds.find(r => r.number === 3);
-        console.log(`Created ${roundData?.matches?.length || 0} matches for mix round`);
-      } else if (this.currentRound === 4) {
-        this.generateRegularRound(updatedBracketData, this.currentRound);
-      }
-      
-      // Save to Firebase using Americano specific method
-      await firebaseService.saveTournamentBracketAmericano(
-        this.selectedTournamentId,
-        updatedBracketData
-      );
-      
-      try {
-        if (loadingDialog) Swal.close();
-      } catch (e) {
-        console.log('Next round generated successfully');
-      }
-      
-      // Reset timer
-      this.gameTimer.reset();
-    } catch (error) {
-      try {
-        Swal.close();
-      } catch (e) {}
-      
-      console.error('Error generating next round:', error);
-      try {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to generate next round. Please try again.',
-          icon: 'error'
-        });
-      } catch (e) {
-        alert('Error: Failed to generate next round. Please try again.');
-      }
-    }
-  }
-  
-  generateRegularRound(bracketData, roundNumber) {
-    const roundData = bracketData.rounds.find(r => r.number === roundNumber);
-    if (!roundData) return;
-    
-    roundData.matches = [];
-    
-    // Group players by their group color
-    const groupedPlayers = {
-      green: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'green'),
-      blue: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'blue'),
-      yellow: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'yellow'),
-      pink: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'pink')
-    };
-    
-    // Generate matches for each group
-    this.generateGroupMatches('green', 'Padel Arenas', groupedPlayers.green, roundData);
-    this.generateGroupMatches('blue', 'Coolbet', groupedPlayers.blue, roundData);
-    this.generateGroupMatches('yellow', 'Lux Express', groupedPlayers.yellow, roundData);
-    this.generateGroupMatches('pink', '3p Logistics', groupedPlayers.pink, roundData);
-  }
-  
-  generateGroupMatches(groupColor, courtName, groupPlayers, roundData) {
-    if (groupPlayers.length < 4) return;
-    
-    // Sort by rating within group
-    const sortedPlayers = this.sortPlayersByRating(groupPlayers);
-    
-    // Create teams: best + worst, 2nd best + 2nd worst, etc.
-    for (let i = 0; i < Math.floor(sortedPlayers.length / 4); i++) {
-      const team1 = [
-        sortedPlayers[i * 4],
-        sortedPlayers[i * 4 + 3]
-      ];
-      
-      const team2 = [
-        sortedPlayers[i * 4 + 1],
-        sortedPlayers[i * 4 + 2]
-      ];
-      
-      const match = {
-        id: `match-${Date.now()}-${roundData.number}-${groupColor}-${i}`,
-        court: courtName,
-        team1: team1,
-        team2: team2,
-        score1: null,
-        score2: null,
-        completed: false,
-        round: roundData.number,
-        groupColor: groupColor
-      };
-      
-      roundData.matches.push(match);
-    }
-  }
-  
-  generateMixRound(bracketData) {
-    const roundData = bracketData.rounds.find(r => r.number === 3);
-    if (!roundData) return;
-    
-    roundData.matches = [];
-    
-    // Group players by their group color
-    const groupedPlayers = {
-      green: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'green'),
-      blue: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'blue'),
-      yellow: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'yellow'),
-      pink: this.players.filter(p => this.getPlayerGroupColor(p.id, bracketData) === 'pink')
-    };
-    
-    // Sort each group by standings
-    const sortedGroups = {
-      green: this.sortPlayersByStandings(groupedPlayers.green, bracketData),
-      blue: this.sortPlayersByStandings(groupedPlayers.blue, bracketData),
-      yellow: this.sortPlayersByStandings(groupedPlayers.yellow, bracketData),
-      pink: this.sortPlayersByStandings(groupedPlayers.pink, bracketData)
-    };
-    
-    console.log("Sorted groups for mix round:", {
-      green: sortedGroups.green.length,
-      blue: sortedGroups.blue.length,
-      yellow: sortedGroups.yellow.length,
-      pink: sortedGroups.pink.length
-    });
-    
-    // Create mix matches according to SNP rules
-    // Green + Blue mix - need at least 4 players in each group
-    if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 8) {
-      // Green 1 & Blue 6 vs Green 2 & Blue 5
-      this.createMixMatch(
-        roundData,
-        [sortedGroups.green[0], sortedGroups.blue[5]],
-        [sortedGroups.green[1], sortedGroups.blue[4]],
-        'Mix Round',
-        'mix'
-      );
-      
-      // Green 3 & Blue 8 vs Green 4 & Blue 7
-      this.createMixMatch(
-        roundData,
-        [sortedGroups.green[2], sortedGroups.blue[7]],
-        [sortedGroups.green[3], sortedGroups.blue[6]],
-        'Mix Round',
-        'mix'
-      );
-    } else if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 4) {
-      // Alternative pairing if we don't have enough blue players
-      console.log("Using alternative pairing for Green+Blue (limited players)");
-      this.createMixMatch(
-        roundData,
-        [sortedGroups.green[0], sortedGroups.blue[3]],
-        [sortedGroups.green[1], sortedGroups.blue[2]],
-        'Mix Round',
-        'mix'
-      );
-      
-      this.createMixMatch(
-        roundData,
-        [sortedGroups.green[2], sortedGroups.blue[1]],
-        [sortedGroups.green[3], sortedGroups.blue[0]],
-        'Mix Round',
-        'mix'
-      );
-    }
-    
-    // Yellow + Pink mix - need at least 4 players in each group
-    if (sortedGroups.yellow.length >= 4 && sortedGroups.pink.length >= 4) {
-      // Yellow 9 & Pink 16 vs Yellow 10 & Pink 15
-      this.createMixMatch(
-        roundData,
-        [sortedGroups.yellow[0], sortedGroups.pink[3]],
-        [sortedGroups.yellow[1], sortedGroups.pink[2]],
-        'Mix Round',
-        'mix'
-      );
-      
-      // Yellow 11 & Pink 14 vs Yellow 12 & Pink 13
-      this.createMixMatch(
-        roundData,
-        [sortedGroups.yellow[2], sortedGroups.pink[1]],
-        [sortedGroups.yellow[3], sortedGroups.pink[0]],
-        'Mix Round',
-        'mix'
-      );
-    }
-    
-    // If we still don't have enough matches, create some mixed ones with available players
-    if (roundData.matches.length < 4) {
-      console.log("Not enough matches created, creating additional mixed matches");
-      
-      // Collect all remaining players and create additional matches
-      const allAvailablePlayers = [
-        ...sortedGroups.green, 
-        ...sortedGroups.blue,
-        ...sortedGroups.yellow,
-        ...sortedGroups.pink
-      ];
-      
-      // Filter out players already assigned to matches
-      const usedPlayers = new Set();
-      roundData.matches.forEach(match => {
-        match.team1.forEach(p => usedPlayers.add(p.id));
-        match.team2.forEach(p => usedPlayers.add(p.id));
-      });
-      
-      const availablePlayers = allAvailablePlayers.filter(p => !usedPlayers.has(p.id));
-      console.log(`Found ${availablePlayers.length} available players for additional matches`);
-      
-      // Sort by rating for balanced teams
-      availablePlayers.sort((a, b) => b.rating - a.rating);
-      
-      // Create additional matches with remaining players
-      while (availablePlayers.length >= 4 && roundData.matches.length < 4) {
-        const team1 = [availablePlayers.shift(), availablePlayers.shift()];
-        const team2 = [availablePlayers.shift(), availablePlayers.shift()];
-        
-        this.createMixMatch(
-          roundData,
-          team1,
-          team2,
-          'Mix Round',
-          'mix'
-        );
-      }
-    }
-    
-    console.log(`Generated ${roundData.matches.length} mix round matches`);
-  }
-  
-  createMixMatch(roundData, team1, team2, courtName, groupColor) {
-    // Ensure we have complete teams
-    if (!team1 || !team2 || team1.length !== 2 || team2.length !== 2) return;
-    
-    // Filter out undefined players
-    team1 = team1.filter(player => player);
-    team2 = team2.filter(player => player);
-    
-    if (team1.length !== 2 || team2.length !== 2) return;
-    
-    const match = {
-      id: `match-${Date.now()}-${roundData.number}-mix-${roundData.matches.length}`,
-      court: courtName,
-      team1: team1,
-      team2: team2,
-      score1: null,
-      score2: null,
-      completed: false,
-      round: roundData.number,
-      groupColor: groupColor
-    };
-    
-    roundData.matches.push(match);
-  }
-  
-  sortPlayersByStandings(groupPlayers, bracketData) {
-    // Get current standings for these players
-    return [...groupPlayers].sort((a, b) => {
-      const aStanding = bracketData.standings.find(s => s.id === a.id);
-      const bStanding = bracketData.standings.find(s => s.id === b.id);
-      
-      if (!aStanding || !bStanding) return 0;
-      
-      // Sort by points, then wins
-      if (bStanding.points !== aStanding.points) {
-        return bStanding.points - aStanding.points;
-      }
-      
-      if (bStanding.wins !== aStanding.wins) {
-        return bStanding.wins - aStanding.wins;
-      }
-      
-      // If all else is equal, sort by rating
-      return b.rating - a.rating;
-    });
-  }
-  
-  getPlayerGroupColor(playerId, bracketData) {
-    const standing = bracketData.standings.find(s => s.id === playerId);
-    return standing ? standing.group : this.determineInitialGroup(this.players.find(p => p.id === playerId));
-  }
-  
-  // Add tournament end functionality
-  async endTournament() {
-    const result = await Swal.fire({
-      title: 'End Tournament?',
-      text: 'This will finalize the tournament results and mark it as completed. Continue?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, end tournament',
-      cancelButtonText: 'Cancel'
-    });
-    
-    if (!result.isConfirmed) return;
-    
-    try {
-      Swal.fire({
-        title: 'Finalizing tournament...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
-      
-      // Update tournament status
-      await firebaseService.updateTournament(
-        this.selectedTournamentId,
-        {
-          status_id: 3, // Completed status
-          completedDate: firebaseService.timestamp()
-        }
-      );
-      
-      // Create a deep copy of bracket data to modify
-      const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-      
-      // Add final standings information
-      updatedBracketData.completed = true;
-      updatedBracketData.completedDate = new Date().toISOString();
-      
-      // Save to Firebase
-      await firebaseService.saveTournamentBracket(
-        this.selectedTournamentId,
-        updatedBracketData
-      );
-      
-      Swal.close();
-      
-      Swal.fire({
-        title: 'Tournament Completed',
-        text: 'The tournament has been successfully completed!',
-        icon: 'success',
-        confirmButtonText: 'Return to Tournament List'
-      }).then(() => {
-        window.location.href = 'tournament-list.html';
-      });
-    } catch (error) {
-      Swal.close();
-      console.error('Error ending tournament:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to end tournament. Please try again.',
-        icon: 'error'
-      });
-    }
-  }
-  
-  // Cleanup when leaving the page
-  cleanup() {
-    // Unsubscribe from all Firebase listeners
-    this.unsubscribeFunctions.forEach(unsubscribe => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    });
-    
-    // Clear timers
-    if (this.gameTimer && this.gameTimer.interval) {
-      clearInterval(this.gameTimer.interval);
-    }
-  }
-}
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  const bracketApp = new TournamentBracketAmericano();
-  
-  // Set up cleanup on page unload
-  window.addEventListener('beforeunload', () => {
-    bracketApp.cleanup();
   });
-});
