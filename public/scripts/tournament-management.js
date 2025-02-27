@@ -438,11 +438,89 @@ class TournamentManager {
         })),
       };
 
-      // Save to Firebase
-      await firebaseService.saveTournamentBracket(
-        this.selectedTournamentId,
-        bracketData
-      );
+      // For Americano format, we need to adjust the data structure
+      if (this.tournamentData.format === 'Americano') {
+        console.log('Creating Americano format bracket');
+        
+        // Create specific Americano structure
+        const americanoBracketData = {
+          format: 'Americano',
+          currentRound: 1,
+          rounds: [
+            { number: 1, completed: false, matches: [] },
+            { number: 2, completed: false, matches: [] },
+            { number: 3, completed: false, matches: [] },
+            { number: 4, completed: false, matches: [] }
+          ],
+          completedMatches: [],
+          standings: this.tournamentPlayers.slice(0, 16).map(player => {
+            // Determine group based on rank
+            const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+            const playerIndex = sortedPlayers.findIndex(p => p.id === player.id);
+            const groupSize = Math.ceil(sortedPlayers.length / 4);
+            
+            let group = 'green';
+            if (playerIndex < groupSize) {
+              group = 'green'; // Top group
+            } else if (playerIndex < groupSize * 2) {
+              group = 'blue'; // Second group
+            } else if (playerIndex < groupSize * 3) {
+              group = 'yellow'; // Third group
+            } else {
+              group = 'pink'; // Bottom group
+            }
+            
+            return {
+              id: player.id,
+              name: player.name,
+              group: group,
+              points: 0,
+              gamesPlayed: 0,
+              wins: 0,
+              losses: 0
+            };
+          })
+        };
+        
+        // Add matches to the first round
+        const firstRound = americanoBracketData.rounds[0];
+        
+        // Group players by their assigned courts (which reflects their group)
+        this.COURT_ORDER.forEach((courtName, index) => {
+          const courtId = `court-${index + 1}`;
+          const courtPlayers = this.getPlayersForCourt(courtId);
+          const groupColor = ['green', 'blue', 'yellow', 'pink'][index];
+          
+          if (courtPlayers.length === 4) {
+            const match = {
+              id: `match-${Date.now()}-1-${groupColor}-${index}`,
+              court: courtName,
+              team1: [courtPlayers[0], courtPlayers[1]],
+              team2: [courtPlayers[2], courtPlayers[3]],
+              score1: null,
+              score2: null,
+              completed: false,
+              round: 1,
+              groupColor: groupColor
+            };
+            
+            firstRound.matches.push(match);
+          }
+        });
+        
+        // Save using Americano specific method
+        await firebaseService.saveTournamentBracketAmericano(
+          this.selectedTournamentId,
+          americanoBracketData
+        );
+      } else {
+        // For Mexicano format, use standard bracket structure
+        console.log('Creating Mexicano format bracket');
+        await firebaseService.saveTournamentBracket(
+          this.selectedTournamentId,
+          bracketData
+        );
+      }
 
       // Update tournament status to ongoing
       await firebaseService.updateTournament(
