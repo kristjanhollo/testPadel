@@ -444,6 +444,7 @@ makeScoreEditable(element, matchId, scoreType) {
     this.handleScoreUpdate(element, input, matchId, scoreType, originalText);
   };
 
+  console.log('phase 2');
   // Use keyup instead of oninput for more controlled behavior
   input.onkeyup = (e) => {
     // Only proceed on number keys, backspace, or delete
