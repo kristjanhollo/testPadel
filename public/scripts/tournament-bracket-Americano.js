@@ -2,13 +2,7 @@
 import '../styles/tournament-bracket-Americano.css';
 import firebaseService from './services/firebase-service';
 
-// Import utility modules
-import {
-  ValidationUtils,
-  PlayerSortUtils,
-  ConflictUtils,
-  GameScoreUtils,
-} from './utils.js';
+
 
 /**
  * Tournament Bracket Americano class
@@ -69,14 +63,20 @@ class TournamentBracketAmericano {
     }
     
     try {
-      // Show loading
-      Swal.fire({
-        title: 'Loading tournament data...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
+      console.log('Initializing tournament bracket...');
+      
+      // Show loading indication - either with Swal or console
+      try {
+        Swal.fire({
+          title: 'Loading tournament data...',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+      } catch (e) {
+        console.log('Loading tournament data...');
+      }
       
       // Set up listeners for data changes
       this.setupDataListeners();
@@ -84,9 +84,9 @@ class TournamentBracketAmericano {
       // Wait for initial data
       await this.waitForData();
       
-      Swal.close();
+      try { Swal.close(); } catch (e) {}
       
-      if (this.tournament) {
+      if (this.tournament && this.tournamentNameElement) {
         this.tournamentNameElement.textContent = this.tournament.name + ' - Americano';
       }
       
@@ -104,56 +104,104 @@ class TournamentBracketAmericano {
       
       // Update button states
       this.updateButtonStates();
+      
+      console.log('Tournament bracket initialized successfully');
     } catch (error) {
-      Swal.close();
+      try { Swal.close(); } catch (e) {}
+      
       console.error('Error initializing tournament bracket:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to load tournament data. Please try again later.',
-        icon: 'error',
-        confirmButtonText: 'Go Back to List',
-      }).then(() => {
+      
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to load tournament data. Please try again later.',
+          icon: 'error',
+          confirmButtonText: 'Go Back to List',
+        }).then(() => {
+          window.location.href = 'tournament-list.html';
+        });
+      } catch (e) {
+        alert('Error: Failed to load tournament data.');
         window.location.href = 'tournament-list.html';
-      });
+      }
     }
   }
   
   setupDataListeners() {
-    // Listen for tournament data changes
-    const unsubscribeTournament = firebaseService.listenToTournament(
-      this.selectedTournamentId,
-      (tournamentData) => {
-        if (tournamentData) {
-          this.tournament = tournamentData;
-        } else {
-          console.error('Tournament not found');
+    if (!this.selectedTournamentId) {
+      console.error('No tournament ID found. Cannot set up data listeners.');
+      return;
+    }
+    
+    try {
+      console.log('Setting up data listeners for tournament:', this.selectedTournamentId);
+      
+      // Listen for tournament data changes
+      const unsubscribeTournament = firebaseService.listenToTournament(
+        this.selectedTournamentId,
+        (tournamentData) => {
+          if (tournamentData) {
+            console.log('Tournament data received:', tournamentData.name);
+            this.tournament = tournamentData;
+            
+            // Update tournament name if element exists
+            if (this.tournamentNameElement && tournamentData.name) {
+              this.tournamentNameElement.textContent = tournamentData.name + ' - Americano';
+            }
+          } else {
+            console.error('Tournament not found');
+          }
         }
-      }
-    );
-    
-    // Listen for bracket data changes
-    const unsubscribeBracket = firebaseService.listenToTournamentBracket(
-      this.selectedTournamentId,
-      (bracketData) => {
-        if (bracketData) {
-          this.bracketData = bracketData;
-          this.currentRound = bracketData.currentRound || 1;
-          this.renderAllRounds();
-          this.renderStandings();
-          this.updateButtonStates();
+      );
+      
+      // Listen for bracket data changes
+      const unsubscribeBracket = firebaseService.listenToTournamentBracket(
+        this.selectedTournamentId,
+        (bracketData) => {
+          if (bracketData) {
+            console.log('Bracket data received. Current round:', bracketData.currentRound);
+            this.bracketData = bracketData;
+            this.currentRound = bracketData.currentRound || 1;
+            
+            // Only render if the bracket data has the expected structure
+            if (bracketData.rounds) {
+              this.renderAllRounds();
+            } else {
+              console.warn('Bracket data missing rounds property');
+            }
+            
+            if (bracketData.standings) {
+              this.renderStandings();
+            } else {
+              console.warn('Bracket data missing standings property');
+            }
+            
+            this.updateButtonStates();
+          } else {
+            console.log('No bracket data found, will need to initialize');
+          }
         }
-      }
-    );
-    
-    // Listen for tournament players changes
-    const unsubscribePlayers = firebaseService.listenToTournamentPlayers(
-      this.selectedTournamentId,
-      (players) => {
-        this.players = players;
-      }
-    );
-    
-    this.unsubscribeFunctions.push(unsubscribeTournament, unsubscribeBracket, unsubscribePlayers);
+      );
+      
+      // Listen for tournament players changes
+      const unsubscribePlayers = firebaseService.listenToTournamentPlayers(
+        this.selectedTournamentId,
+        (players) => {
+          if (Array.isArray(players)) {
+            console.log('Player data received. Count:', players.length);
+            this.players = players;
+          } else {
+            console.warn('Received invalid players data:', players);
+            this.players = [];
+          }
+        }
+      );
+      
+      this.unsubscribeFunctions.push(unsubscribeTournament, unsubscribeBracket, unsubscribePlayers);
+      console.log('Data listeners set up successfully');
+    } catch (error) {
+      console.error('Error setting up data listeners:', error);
+    }
   }
   
   // Wait for initial data to be loaded
@@ -253,17 +301,43 @@ class TournamentBracketAmericano {
   }
 
   sortPlayersByRating(playersArray) {
+    if (!Array.isArray(playersArray)) {
+      console.warn('sortPlayersByRating received invalid input:', playersArray);
+      return [];
+    }
+    
     return [...playersArray].sort((a, b) => {
-      if (b.rating !== a.rating) {
-        return b.rating - a.rating;
+      // Handle missing or invalid rating values
+      const ratingA = typeof a?.rating === 'number' ? a.rating : 0;
+      const ratingB = typeof b?.rating === 'number' ? b.rating : 0;
+      
+      if (ratingB !== ratingA) {
+        return ratingB - ratingA;
       }
-      // If ratings are equal, sort by name
-      return a.name.localeCompare(b.name);
+      
+      // If ratings are equal, sort by name if available
+      const nameA = a?.name || '';
+      const nameB = b?.name || '';
+      return nameA.localeCompare(nameB);
     });
   }
 
   async initializeBracket() {
     try {
+      console.log('Initializing new bracket data...');
+      
+      // Create player standings only if players exist
+      const playerStandings = Array.isArray(this.players) ? 
+        this.players.map(player => ({
+          id: player.id,
+          name: player.name,
+          group: this.determineInitialGroup(player),
+          points: 0,
+          gamesPlayed: 0,
+          wins: 0,
+          losses: 0
+        })) : [];
+      
       const bracketData = {
         format: 'Americano',
         currentRound: 1,
@@ -274,74 +348,109 @@ class TournamentBracketAmericano {
           { number: 4, completed: false, matches: [] }
         ],
         completedMatches: [],
-        standings: this.players.map(player => ({
-          id: player.id,
-          name: player.name,
-          group: this.determineInitialGroup(player),
-          points: 0,
-          gamesPlayed: 0,
-          wins: 0,
-          losses: 0
-        }))
+        standings: playerStandings
       };
       
+      console.log('Saving initial bracket data to Firebase...');
       // Save to Firebase
       await firebaseService.saveTournamentBracket(this.selectedTournamentId, bracketData);
       
+      console.log('Bracket data saved successfully');
       this.bracketData = bracketData;
       this.renderAllRounds();
       this.renderStandings();
     } catch (error) {
       console.error('Error initializing bracket:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to initialize bracket. Please try again.',
-        icon: 'error'
-      });
+      try {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to initialize bracket. Please try again.',
+          icon: 'error'
+        });
+      } catch (e) {
+        alert('Error: Failed to initialize bracket. Please try again.');
+      }
     }
   }
 
   determineInitialGroup(player) {
-    // Sort all players by rating
-    const sortedPlayers = this.sortPlayersByRating(this.players);
+    if (!player || !player.id) {
+      console.warn('Cannot determine group for invalid player:', player);
+      return 'green'; // Default to green group for invalid players
+    }
     
-    // Split into 4 equal groups
-    const groupSize = Math.ceil(sortedPlayers.length / 4);
+    // Ensure players array exists and is valid
+    if (!Array.isArray(this.players) || this.players.length === 0) {
+      console.warn('No players available to determine groups');
+      return 'green';
+    }
     
-    // Find player index in sorted array
-    const playerIndex = sortedPlayers.findIndex(p => p.id === player.id);
-    
-    // Assign group based on index
-    if (playerIndex < groupSize) {
-      return 'green'; // Top group (Padel Arenas)
-    } else if (playerIndex < groupSize * 2) {
-      return 'blue'; // Second group (Coolbet)
-    } else if (playerIndex < groupSize * 3) {
-      return 'yellow'; // Third group (Lux Express)
-    } else {
-      return 'pink'; // Bottom group (3p Logistics)
+    try {
+      // Sort all players by rating
+      const sortedPlayers = this.sortPlayersByRating(this.players);
+      
+      // Split into 4 equal groups
+      const groupSize = Math.ceil(sortedPlayers.length / 4) || 1; // Prevent division by zero
+      
+      // Find player index in sorted array
+      const playerIndex = sortedPlayers.findIndex(p => p && p.id === player.id);
+      
+      // Handle case where player is not found
+      if (playerIndex === -1) {
+        console.warn(`Player ${player.id} not found in players list`);
+        return 'green';
+      }
+      
+      // Assign group based on index
+      if (playerIndex < groupSize) {
+        return 'green'; // Top group (Padel Arenas)
+      } else if (playerIndex < groupSize * 2) {
+        return 'blue'; // Second group (Coolbet)
+      } else if (playerIndex < groupSize * 3) {
+        return 'yellow'; // Third group (Lux Express)
+      } else {
+        return 'pink'; // Bottom group (3p Logistics)
+      }
+    } catch (error) {
+      console.error('Error determining player group:', error);
+      return 'green'; // Default to green group on error
     }
   }
   
   // Render Functions
   renderAllRounds() {
-    if (!this.bracketData) return;
+    if (!this.bracketData) {
+      console.warn('Cannot render rounds: No bracket data available');
+      return;
+    }
     
-    this.renderRound(1, this.round1Courts);
-    this.renderRound(2, this.round2Courts);
-    this.renderRound(3, this.round3Courts);
-    this.renderRound(4, this.round4Courts);
+    // Check if all court containers exist
+    if (this.round1Courts) this.renderRound(1, this.round1Courts);
+    if (this.round2Courts) this.renderRound(2, this.round2Courts);
+    if (this.round3Courts) this.renderRound(3, this.round3Courts);
+    if (this.round4Courts) this.renderRound(4, this.round4Courts);
   }
   
   renderRound(roundNumber, container) {
+    if (!container) return;
     container.innerHTML = '';
     
-    const roundData = this.bracketData.rounds.find(r => r.number === roundNumber);
-    if (!roundData) return;
+    if (!this.bracketData || !this.bracketData.rounds) {
+      console.warn(`No bracket data or rounds found for round ${roundNumber}`);
+      return;
+    }
+    
+    const roundData = this.bracketData.rounds.find(r => r && r.number === roundNumber);
+    if (!roundData || !roundData.matches) {
+      console.warn(`No matches found for round ${roundNumber}`);
+      return;
+    }
     
     roundData.matches.forEach(match => {
-      const courtCard = this.createCourtCard(match);
-      container.appendChild(courtCard);
+      if (match) {
+        const courtCard = this.createCourtCard(match);
+        container.appendChild(courtCard);
+      }
     });
   }
   
@@ -388,7 +497,10 @@ class TournamentBracketAmericano {
   }
   
   renderStandings() {
-    if (!this.bracketData) return;
+    if (!this.bracketData || !this.bracketData.standings) {
+      console.warn('Cannot render standings: No standings data available');
+      return;
+    }
     
     // Group players by group color
     const groupedStandings = {
@@ -398,44 +510,95 @@ class TournamentBracketAmericano {
       pink: []
     };
     
-    this.bracketData.standings.forEach(standing => {
-      if (groupedStandings[standing.group]) {
-        groupedStandings[standing.group].push(standing);
-      }
-    });
+    // Safely process standings
+    if (Array.isArray(this.bracketData.standings)) {
+      this.bracketData.standings.forEach(standing => {
+        if (standing && standing.group && groupedStandings[standing.group]) {
+          groupedStandings[standing.group].push(standing);
+        }
+      });
+    }
     
     // Sort each group by points
     for (const group in groupedStandings) {
       groupedStandings[group].sort((a, b) => {
-        if (b.points !== a.points) return b.points - a.points;
-        if (b.wins !== a.wins) return b.wins - a.wins;
+        const pointsA = typeof a.points === 'number' ? a.points : 0;
+        const pointsB = typeof b.points === 'number' ? b.points : 0;
+        const winsA = typeof a.wins === 'number' ? a.wins : 0;
+        const winsB = typeof b.wins === 'number' ? b.wins : 0;
+        
+        if (pointsB !== pointsA) return pointsB - pointsA;
+        if (winsB !== winsA) return winsB - winsA;
         return 0;
       });
     }
     
-    // Render each group
-    this.renderGroupStandings(groupedStandings.green, this.greenGroupPlayers);
-    this.renderGroupStandings(groupedStandings.blue, this.blueGroupPlayers);
-    this.renderGroupStandings(groupedStandings.yellow, this.yellowGroupPlayers);
-    this.renderGroupStandings(groupedStandings.pink, this.pinkGroupPlayers);
+    // Render each group if the container exists
+    if (this.greenGroupPlayers) this.renderGroupStandings(groupedStandings.green, this.greenGroupPlayers);
+    if (this.blueGroupPlayers) this.renderGroupStandings(groupedStandings.blue, this.blueGroupPlayers);
+    if (this.yellowGroupPlayers) this.renderGroupStandings(groupedStandings.yellow, this.yellowGroupPlayers);
+    if (this.pinkGroupPlayers) this.renderGroupStandings(groupedStandings.pink, this.pinkGroupPlayers);
   }
   
   renderGroupStandings(groupStandings, container) {
+    if (!container) {
+      console.warn('Cannot render group standings: Container element is missing');
+      return;
+    }
+    
     container.innerHTML = '';
     
+    if (!Array.isArray(groupStandings) || groupStandings.length === 0) {
+      container.innerHTML = '<div class="no-standings">No players in this group</div>';
+      return;
+    }
+    
+    // Check if template is available
+    if (!this.playerRankingTemplate) {
+      console.warn('Player ranking template not found');
+      
+      // Fallback to direct HTML creation
+      groupStandings.forEach((standing, index) => {
+        const playerRanking = document.createElement('div');
+        playerRanking.className = 'player-ranking';
+        playerRanking.innerHTML = `
+          <span class="player-rank">${index + 1}.</span>
+          <span class="player-name">${standing.name || 'Unknown'}</span>
+          <span class="player-points">${(standing.points || 0)}p</span>
+        `;
+        container.appendChild(playerRanking);
+      });
+      return;
+    }
+    
+    // Use template for normal rendering
     groupStandings.forEach((standing, index) => {
-      const template = this.playerRankingTemplate.content.cloneNode(true);
-      const playerRanking = template.querySelector('.player-ranking');
-      
-      const rankEl = playerRanking.querySelector('.player-rank');
-      const nameEl = playerRanking.querySelector('.player-name');
-      const pointsEl = playerRanking.querySelector('.player-points');
-      
-      rankEl.textContent = `${index + 1}.`;
-      nameEl.textContent = standing.name;
-      pointsEl.textContent = `${standing.points}p`;
-      
-      container.appendChild(playerRanking);
+      try {
+        const template = this.playerRankingTemplate.content.cloneNode(true);
+        const playerRanking = template.querySelector('.player-ranking');
+        
+        if (!playerRanking) {
+          throw new Error('Player ranking element not found in template');
+        }
+        
+        const rankEl = playerRanking.querySelector('.player-rank');
+        const nameEl = playerRanking.querySelector('.player-name');
+        const pointsEl = playerRanking.querySelector('.player-points');
+        
+        if (rankEl) rankEl.textContent = `${index + 1}.`;
+        if (nameEl) nameEl.textContent = standing.name || 'Unknown';
+        if (pointsEl) pointsEl.textContent = `${(standing.points || 0)}p`;
+        
+        container.appendChild(playerRanking);
+      } catch (error) {
+        console.error('Error rendering player ranking:', error);
+        
+        // Fallback to simple div
+        const fallbackDiv = document.createElement('div');
+        fallbackDiv.className = 'player-ranking fallback';
+        fallbackDiv.textContent = `${index + 1}. ${standing.name || 'Unknown'} - ${(standing.points || 0)}p`;
+        container.appendChild(fallbackDiv);
+      }
     });
   }
   
