@@ -417,6 +417,49 @@ renderRoundContent(roundNumber) {
   });
 }
   
+  validateInput(input, element, matchId, scoreType, originalText) {
+    // Validate the input value
+    const score = input.value ? parseInt(input.value) : null;
+    
+    // Check if score is within allowed range
+    if (score !== null && (score < 0 || score > 10)) {
+      Swal.fire({
+        title: 'Invalid Score',
+        text: 'Score must be between 0 and 10',
+        icon: 'error'
+      });
+      return false;
+    }
+    
+    // Save score and update UI
+    this.updateMatchScore(matchId, scoreType, score)
+      .then(() => {
+        element.classList.remove('editing');
+        element.textContent = score ?? '-';
+        
+        element.style.backgroundColor = '#e6ffe6'; // Light green background
+        
+        // Remove highlight after a short delay
+        setTimeout(() => {
+          element.style.backgroundColor = '';
+        }, 500);
+      })
+      .catch(error => {
+        console.error('Error updating score:', error);
+        element.classList.remove('editing');
+        element.textContent = originalText;
+        
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to save score',
+          icon: 'error',
+          timer: 2000
+        });
+      });
+    
+    return true;
+  }
+  
   makeScoreEditable(element, matchId, scoreType) {
     // Check if we're already editing this score
     if (element.querySelector('.score-input')) {
@@ -439,15 +482,17 @@ renderRoundContent(roundNumber) {
     // Style the parent element to indicate editing mode
     element.classList.add('editing');
     
-    // Add input handlers
-    input.onblur = () => {
-      this.handleScoreUpdate(element, input, matchId, scoreType, originalText);
-    };
-  
-    input.onkeypress = (e) => {
+    // Handle Enter key for navigation
+    input.onkeydown = (e) => {
       if (e.key === 'Enter') {
-        input.blur();
+        e.preventDefault();
+        this.validateInput(input, element, matchId, scoreType, originalText);
       }
+    };
+    
+    // Save score when input loses focus
+    input.onblur = () => {
+      this.validateInput(input, element, matchId, scoreType, originalText);
     };
   
     // Clear text and add input
