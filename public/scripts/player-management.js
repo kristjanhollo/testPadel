@@ -1,4 +1,5 @@
-import firebaseService from './services/firebase-service.js';
+// Use the global firebaseService object
+// const firebaseService = window.firebaseService;
 // State variables
 let players = [];
 let currentPage = 1;
@@ -359,9 +360,6 @@ function formatDate(dateValue) {
   }
 }
 
-// Export functions to be used in HTML
-export { editPlayer, deletePlayer };
-
-// Also make functions available globally for backward compatibility
+// Make functions available globally
 window.editPlayer = editPlayer;
 window.deletePlayer = deletePlayer;

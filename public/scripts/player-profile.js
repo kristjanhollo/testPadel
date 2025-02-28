@@ -1,41 +1,56 @@
+// Player Profile JavaScript
+
+// Global chart instance to be able to destroy it later
+let ratingChartInstance = null;
+
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('Player profile page loaded');
+  
   // Get player ID from URL parameter
   const urlParams = new URLSearchParams(window.location.search);
   const playerId = urlParams.get('id');
-
+  
+  console.log('Player ID from URL:', playerId);
+  
   if (!playerId) {
+    console.error('No player ID provided');
+    alert('No player ID provided');
     window.location.href = 'player-management.html';
     return;
   }
-
-  // Firebase service should be loaded
-  if (typeof firebaseService === 'undefined') {
-    console.error('Firebase service is not loaded');
-    return;
-  }
-
+  
   // State variables
   let playerData = null;
   let matchHistory = [];
   let tournamentHistory = [];
   let groupHistory = [];
   let ratingHistory = [];
-
+  
   try {
+    // Verify Firebase service is available
+    if (typeof window.firebaseService === 'undefined') {
+      console.error('Firebase service is not available');
+      throw new Error('Firebase service not found. Please check your setup.');
+    }
+    
     // Load player data from Firebase
-    playerData = await firebaseService.getPlayer(playerId);
+    console.log('Fetching player data from Firebase...');
+    playerData = await window.firebaseService.getPlayer(playerId);
+    console.log('Player data received:', playerData);
     
     if (!playerData) {
       console.error('Player not found');
+      alert('Player not found');
       window.location.href = 'player-management.html';
       return;
     }
-
+    
     // Initialize UI with player data
     initializePlayerUI();
     
-    // Load match history and other data
-    await loadPlayerHistory();
+    // Load sample data for now
+    // In the future, this would load real data from Firebase
+    await loadSampleData();
     
     // Render all sections
     renderRatingChart();
@@ -43,12 +58,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderTournamentHistory();
     renderGroupHistory();
     updateStats();
+    
   } catch (error) {
-    console.error('Error loading player data:', error);
-    alert('Error loading player data. Please try again later.');
+    console.error('Error loading player profile:', error);
+    alert('Error loading player profile: ' + error.message);
   }
-
+  
   function initializePlayerUI() {
+    console.log('Initializing UI with player data');
+    
     // Basic player info
     document.getElementById('playerName').textContent = playerData.name || 'Unknown Player';
     document.getElementById('playerRating').textContent = (playerData.ranking || 0).toFixed(1);
@@ -56,75 +74,105 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Member since date
     const memberSinceEl = document.getElementById('memberSince');
     if (playerData.created_at) {
-      const date = new Date(playerData.created_at);
-      memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
+      // Format the date based on whether it's a Firestore timestamp or a string
+      if (playerData.created_at.toDate) {
+        // Firestore timestamp
+        const date = playerData.created_at.toDate();
+        memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
+      } else {
+        // Regular date string
+        const date = new Date(playerData.created_at);
+        memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
+      }
     } else {
-      memberSinceEl.textContent = 'Member since: Unknown';
+      memberSinceEl.textContent = 'Member since: -';
     }
-
-    // Default group 
+    
+    // Player group (defaulting to 'Hot' if not specified)
     const playerGroup = document.getElementById('playerGroup');
-    const groupName = playerData.group || 'Hot'; // Default to Hot group if not specified
+    const groupName = playerData.group || 'Hot';
     playerGroup.innerHTML = `<span class="group-badge group-${groupName.toLowerCase()}">${groupName} Group</span>`;
   }
-
-  async function loadPlayerHistory() {
-    try {
-      // In a real implementation, these would be loaded from Firebase or another data source
-      // For now, we'll create sample data
-      
-      // Sample match history
-      matchHistory = generateSampleMatches(15); // Last 15 matches
-      
-      // Sample tournament history
-      tournamentHistory = generateSampleTournaments(5);
-      
-      // Sample group history
-      groupHistory = [
-        { group: 'Warm', date: '2025-01-10' },
-        { group: 'Hot', date: '2025-02-15' }
-      ];
-      
-      // Sample rating history (for the chart)
-      ratingHistory = generateSampleRatingHistory(6);
-      
-    } catch (error) {
-      console.error('Error loading player history:', error);
-    }
+  
+  async function loadSampleData() {
+    console.log('Loading sample data for player profile');
+    
+    // In a future version, this would load real data from Firebase
+    // For now, generate sample data
+    
+    // Sample match history (last 15 matches)
+    matchHistory = generateSampleMatches(15);
+    
+    // Sample tournament history
+    tournamentHistory = generateSampleTournaments(5);
+    
+    // Sample group history
+    groupHistory = [
+      { group: 'Warm', date: '2025-01-10' },
+      { group: 'Hot', date: '2025-02-15' }
+    ];
+    
+    // Sample rating history for the chart
+    ratingHistory = generateSampleRatingHistory(6);
+    
+    return Promise.resolve();
   }
-
+  
   function updateStats() {
+    console.log('Updating player statistics');
+    
+    // Calculate basic stats from match history
     const wins = matchHistory.filter(m => m.result === 'win').length;
     const totalMatches = matchHistory.length;
     const winRate = totalMatches > 0 ? (wins / totalMatches * 100).toFixed(1) : 0;
-
-    // Update stats
+    
+    // Update stats in UI
     document.getElementById('matchesPlayed').textContent = totalMatches;
     document.getElementById('totalWins').textContent = wins;
     document.getElementById('totalLosses').textContent = totalMatches - wins;
     document.getElementById('winRate').textContent = `${winRate}%`;
     document.getElementById('tournamentsPlayed').textContent = tournamentHistory.length;
     
-    // Set default ranking (#15)
+    // Set ranking (in a real app this would be calculated)
     document.getElementById('playerRanking').textContent = '#15';
   }
-
+  
   function renderRatingChart() {
-    const chartCanvas = document.getElementById('ratingChart');
-    if (!chartCanvas) return;
+    console.log('Rendering rating history chart');
+    
+    // Get the container element
+    const chartContainer = document.getElementById('ratingChartContainer');
+    if (!chartContainer) {
+      console.error('Rating chart container not found');
+      return;
+    }
     
     // Only proceed if we have rating history
     if (ratingHistory.length === 0) {
-      chartCanvas.parentElement.innerHTML = '<p class="no-data">No rating history available</p>';
+      console.warn('No rating history data available');
+      chartContainer.innerHTML = '<p class="no-data">No rating history available</p>';
       return;
     }
-
+    
+    // Clean up any existing chart
+    if (ratingChartInstance) {
+      console.log('Destroying existing chart instance');
+      ratingChartInstance.destroy();
+      ratingChartInstance = null;
+    }
+    
+    // Remove the old canvas and create a new one to avoid any Chart.js caching issues
+    chartContainer.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvas.id = 'ratingChart';
+    chartContainer.appendChild(canvas);
+    
     // Format data for Chart.js
     const dates = ratingHistory.map(item => new Date(item.date).toLocaleDateString());
     const ratings = ratingHistory.map(item => item.rating);
-
-    // Create chart
-    new Chart(chartCanvas, {
+    
+    // Create chart and store the instance
+    ratingChartInstance = new Chart(canvas, {
       type: 'line',
       data: {
         labels: dates,
@@ -176,32 +224,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             borderColor: '#e2e8f0',
             borderWidth: 1,
             padding: 10,
-            displayColors: false,
-            callbacks: {
-              title: function(tooltipItems) {
-                return dates[tooltipItems[0].dataIndex];
-              },
-              label: function(context) {
-                return `Rating: ${context.raw}`;
-              }
-            }
+            displayColors: false
           }
         }
       }
     });
   }
-
+  
   function renderMatchHistory() {
+    console.log('Rendering match history');
+    
     const matchesList = document.getElementById('matchesList');
-    if (!matchesList) return;
+    if (!matchesList) {
+      console.error('Matches list element not found');
+      return;
+    }
     
     matchesList.innerHTML = '';
-
+    
     if (matchHistory.length === 0) {
       matchesList.innerHTML = '<tr><td colspan="6" class="no-data">No match history available</td></tr>';
       return;
     }
-
+    
     matchHistory.forEach(match => {
       const row = document.createElement('tr');
       row.innerHTML = `
@@ -215,18 +260,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       matchesList.appendChild(row);
     });
   }
-
+  
   function renderTournamentHistory() {
+    console.log('Rendering tournament history');
+    
     const tournamentsList = document.getElementById('tournamentsList');
-    if (!tournamentsList) return;
+    if (!tournamentsList) {
+      console.error('Tournaments list element not found');
+      return;
+    }
     
     tournamentsList.innerHTML = '';
-
+    
     if (tournamentHistory.length === 0) {
       tournamentsList.innerHTML = '<div class="no-data">No tournament history available</div>';
       return;
     }
-
+    
     tournamentHistory.forEach(tournament => {
       const card = document.createElement('div');
       card.className = 'tournament-card';
@@ -256,28 +306,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       tournamentsList.appendChild(card);
     });
   }
-
+  
   function renderGroupHistory() {
+    console.log('Rendering group history');
+    
     const groupHistoryEl = document.getElementById('groupHistory');
-    if (!groupHistoryEl) return;
+    if (!groupHistoryEl) {
+      console.error('Group history element not found');
+      return;
+    }
     
     groupHistoryEl.innerHTML = '';
-
+    
     if (groupHistory.length === 0) {
       groupHistoryEl.innerHTML = '<div class="no-data">No group history available</div>';
       return;
     }
-
+    
     // Sort by date
     groupHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
-
+    
     // Create timeline
     groupHistory.forEach((item, index) => {
       const groupEl = document.createElement('span');
       groupEl.className = `timeline-group group-${item.group.toLowerCase()}`;
       groupEl.textContent = `${item.group} (${new Date(item.date).toLocaleDateString()})`;
       groupHistoryEl.appendChild(groupEl);
-
+      
       // Add arrow if not the last item
       if (index < groupHistory.length - 1) {
         const arrowEl = document.createElement('span');
@@ -286,21 +341,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         groupHistoryEl.appendChild(arrowEl);
       }
     });
-
+    
     // Add current group if different from last
     if (playerData.group && (groupHistory.length === 0 || groupHistory[groupHistory.length - 1].group !== playerData.group)) {
       const arrowEl = document.createElement('span');
       arrowEl.className = 'timeline-arrow';
       arrowEl.textContent = '→';
       groupHistoryEl.appendChild(arrowEl);
-
+      
       const groupEl = document.createElement('span');
       groupEl.className = `timeline-group group-${playerData.group.toLowerCase()}`;
       groupEl.textContent = `${playerData.group} (Current)`;
       groupHistoryEl.appendChild(groupEl);
     }
   }
-
+  
   // Helper function to generate sample match data
   function generateSampleMatches(count) {
     const tournaments = ['Sunday Night Padel', 'Weekend Cup', 'Community League'];
@@ -335,7 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Sort by date (newest first)
     return matches.sort((a, b) => new Date(b.date) - new Date(a.date));
   }
-
+  
   // Helper function to generate sample tournament data
   function generateSampleTournaments(count) {
     const tournamentNames = ['Sunday Night Padel', 'Weekend Cup', 'Community League'];
@@ -369,7 +424,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Sort by date (newest first)
     return tournaments.sort((a, b) => new Date(b.date) - new Date(a.date));
   }
-
+  
   // Helper function to generate sample rating history
   function generateSampleRatingHistory(count) {
     const history = [];
