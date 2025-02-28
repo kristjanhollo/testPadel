@@ -49,6 +49,15 @@ function renderPlayers(filteredList = null) {
 
   paginatedPlayers.forEach((player) => {
     const row = document.createElement('tr');
+    // Lisa klõpsatavuse stiil ja funktsioon terve reale
+    row.style.cursor = 'pointer'; 
+    row.addEventListener('click', (e) => {
+      // Kui klikiti nuppudel, siis ära navigeeri profiilile
+      if (!e.target.closest('.btn')) {
+        window.location.href = `player-profile.html?id=${player.id}`;
+      }
+    });
+    
     row.innerHTML = `
       <td>${player.name}</td>
       <td>${player.ranking || 'N/A'}</td>

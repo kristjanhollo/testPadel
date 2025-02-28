@@ -6,92 +6,125 @@
     <title>Padel Bandeja - Player Profile</title>
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/player-profile.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Padel Bandeja</h1>
-            <p>Player Profile</p>
-        </header>
+<header onclick="location.href='index.html'" style="cursor: pointer;">
+    <h1>Padel Bandeja</h1>
+    <p>Player Profile</p>
+</header>
 
         <main>
+            <!-- Profile Header -->
             <div class="profile-header">
                 <div class="profile-info">
                     <h2 id="playerName">Player Name</h2>
-                    <div class="player-stats">
-                        <div class="stat">
-                            <span class="stat-label">Ranking</span>
-                            <span id="playerRanking" class="stat-value">#0</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-label">Rating</span>
-                            <span id="playerRating" class="stat-value">1500</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-label">Win Rate</span>
-                            <span id="winRate" class="stat-value">0%</span>
-                        </div>
+                    <p id="memberSince" class="member-since">Member since: -</p>
+                    <div id="playerGroup" class="player-group">
+                        <!-- Group badge will be inserted here -->
+                    </div>
+                </div>
+                <div class="player-stats">
+                    <div class="stat">
+                        <span class="stat-label">Rating</span>
+                        <span id="playerRating" class="stat-value">-</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Win Rate</span>
+                        <span id="winRate" class="stat-value">0%</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Ranking</span>
+                        <span id="playerRanking" class="stat-value">#0</span>
                     </div>
                 </div>
             </div>
 
-            <div class="stats-overview">
-                <div class="stats-card">
+            <!-- Rating and Stats Section -->
+            <div class="stats-section">
+                <div class="rating-chart-container">
+                    <h3>Rating History</h3>
+                    <div id="ratingChartContainer">
+                        <canvas id="ratingChart"></canvas>
+                    </div>
+                </div>
+                <div class="performance-stats">
                     <h3>Performance Stats</h3>
                     <div class="stats-grid">
                         <div class="stat-item">
-                            <span class="label">Matches Played</span>
-                            <span id="matchesPlayed" class="value">0</span>
+                            <div class="label">Matches</div>
+                            <div id="matchesPlayed" class="value">-</div>
                         </div>
                         <div class="stat-item">
-                            <span class="label">Wins</span>
-                            <span id="totalWins" class="value">0</span>
+                            <div class="label">Wins</div>
+                            <div id="totalWins" class="value">-</div>
                         </div>
                         <div class="stat-item">
-                            <span class="label">Losses</span>
-                            <span id="totalLosses" class="value">0</span>
+                            <div class="label">Losses</div>
+                            <div id="totalLosses" class="value">-</div>
                         </div>
                         <div class="stat-item">
-                            <span class="label">Tournaments</span>
-                            <span id="tournamentsPlayed" class="value">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="label">Tournament Wins</span>
-                            <span id="tournamentWins" class="value">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="label">Sets Won</span>
-                            <span id="setsWon" class="value">0</span>
+                            <div class="label">Tournaments</div>
+                            <div id="tournamentsPlayed" class="value">-</div>
                         </div>
                     </div>
-                </div>
-
-                <div class="rating-history">
-                    <h3>Rating History</h3>
-                    <div id="ratingChart" class="rating-chart">
-                        <!-- Rating chart will be rendered here -->
+                    <div class="rating-info">
+                        <h4>Rating Calculation</h4>
+                        <p>Rating is calculated based on the last 15 matches.</p>
+                        <p><strong>Current formula: Average points × Coefficient</strong></p>
                     </div>
                 </div>
             </div>
 
-            <div class="match-history">
-                <h3>Recent Matches</h3>
-                <div class="matches-list" id="matchesList">
-                    <!-- Match history will be populated here -->
+            <!-- Recent Matches Section -->
+            <div class="matches-section">
+                <div class="section-header">
+                    <h3>Recent Matches</h3>
+                    <span class="view-all">View All</span>
+                </div>
+                <div class="table-container">
+                    <table class="matches-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Tournament</th>
+                                <th>Opponent</th>
+                                <th>Score</th>
+                                <th>Result</th>
+                                <th>Points</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matchesList">
+                            <!-- Matches will be populated here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
+            <!-- Tournament History Section -->
             <div class="tournaments-section">
                 <h3>Tournament History</h3>
-                <div class="tournaments-list" id="tournamentsList">
-                    <!-- Tournament history will be populated here -->
+                <div id="tournamentsList" class="tournaments-grid">
+                    <!-- Tournaments will be populated here -->
                 </div>
             </div>
 
-            <div class="achievements-section">
-                <h3>Achievements</h3>
-                <div class="achievements-grid" id="achievementsGrid">
-                    <!-- Achievements will be populated here -->
+            <!-- Group History Section -->
+            <div class="group-history-section">
+                <h3>Group History</h3>
+                <div class="group-content">
+                    <p>Player's group progression over time:</p>
+                    <div id="groupHistory" class="group-timeline">
+                        <!-- Group history will be populated here -->
+                    </div>
+                    <div class="group-rules">
+                        <h4>Group Transition Rules</h4>
+                        <ul>
+                            <li>Promotion from Hot to Sweat: Top position in Hot group with 3+ tournaments</li>
+                            <li>Relegation from Hot to Warm: Bottom position in Hot group with 3+ tournaments</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </main>
@@ -101,6 +134,10 @@
             <a href="player-rankings.html" class="nav-link">Player Rankings</a>
         </nav>
     </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="scripts/services/firebase-service.js"></script>
     <script src="scripts/player-profile.js"></script>
 </body>
 </html>
