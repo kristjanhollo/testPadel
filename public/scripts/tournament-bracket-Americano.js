@@ -308,8 +308,136 @@ class TournamentBracketAmericano {
       });
     }
     
+    // Add Complete Tournament button dynamically if it doesn't exist
+    const controlButtons = document.querySelector('.control-buttons');
+    if (controlButtons && !document.getElementById('completeTournament')) {
+      const completeBtn = document.createElement('button');
+      completeBtn.id = 'completeTournament';
+      completeBtn.className = 'btn-success';
+      completeBtn.textContent = 'Complete Tournament';
+      completeBtn.addEventListener('click', () => this.completeTournament());
+      controlButtons.appendChild(completeBtn);
+    } else if (document.getElementById('completeTournament')) {
+      // If button exists, add event listener
+      document.getElementById('completeTournament').addEventListener('click', () => this.completeTournament());
+    }
+    
     // Global function for score changes
     window.handleScoreChange = (event) => this.handleScoreChange(event);
+  }
+  
+  async completeTournament() {
+    try {
+      // Check if all matches have scores
+      const allMatchesCompleted = this.checkAllMatchesCompleted();
+      
+      if (!allMatchesCompleted) {
+        Swal.fire({
+          title: 'Incomplete Matches',
+          text: 'Please enter scores for all matches before completing the tournament.',
+          icon: 'warning'
+        });
+        return;
+      }
+      
+      // Confirm with user
+      const result = await Swal.fire({
+        title: 'Complete Tournament?',
+        text: 'This will mark the tournament as completed and finalize all results. This action cannot be undone.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, complete tournament',
+        cancelButtonText: 'Cancel'
+      });
+      
+      if (!result.isConfirmed) return;
+      
+      // Show loading
+      Swal.fire({
+        title: 'Completing tournament...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Prepare final standings
+      const finalStandings = this.prepareFinalStandings();
+      
+      // Update bracket data with final standings
+      this.bracketData.finalStandings = finalStandings;
+      
+      // Save bracket data
+      await this.saveBracketData();
+      
+      // Update tournament status to completed (status_id = 3)
+      await firebaseService.updateTournament(
+        this.selectedTournamentId,
+        { status_id: 3 }
+      );
+      
+      Swal.close();
+      
+      // Show success message and redirect to stats page
+      Swal.fire({
+        title: 'Tournament Completed!',
+        text: 'The tournament has been marked as completed. Redirecting to results page...',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      }).then(() => {
+        window.location.href = 'tournament-stats.html';
+      });
+      
+    } catch (error) {
+      console.error('Error completing tournament:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to complete the tournament. Please try again.',
+        icon: 'error'
+      });
+    }
+  }
+  
+  checkAllMatchesCompleted() {
+    if (!this.bracketData || !this.bracketData.rounds) return false;
+    
+    // Check all matches in all rounds
+    for (const round of this.bracketData.rounds) {
+      for (const match of round.matches) {
+        if (match.score1 === null || match.score2 === null) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  }
+  
+  prepareFinalStandings() {
+    if (!this.bracketData || !this.bracketData.standings) {
+      return [];
+    }
+    
+    // Create a copy of the standings
+    const standings = [...this.bracketData.standings];
+    
+    // Sort by points (highest first)
+    standings.sort((a, b) => {
+      // Sort by points
+      if (b.points !== a.points) return b.points - a.points;
+      
+      // If points are equal, sort by wins
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      
+      // If wins are equal, sort by games played (fewer is better if same points and wins)
+      if (a.gamesPlayed !== b.gamesPlayed) return a.gamesPlayed - b.gamesPlayed;
+      
+      // If all else is equal, sort alphabetically
+      return a.name.localeCompare(b.name);
+    });
+    
+    return standings;
   }
   
   handleScoreChange(event) {

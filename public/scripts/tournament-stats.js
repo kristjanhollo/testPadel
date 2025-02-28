@@ -82,8 +82,15 @@ class TournamentStats {
       throw new Error('Tournament not found');
     }
 
-    // Load bracket data
-    this.bracketData = await firebaseService.getTournamentBracket(this.tournamentId);
+    // Load bracket data based on tournament format
+    if (this.tournament.format === 'Americano') {
+      console.log('Loading Americano format bracket data');
+      this.bracketData = await firebaseService.getTournamentBracketAmericano(this.tournamentId);
+    } else {
+      console.log('Loading standard format bracket data');
+      this.bracketData = await firebaseService.getTournamentBracket(this.tournamentId);
+    }
+    
     if (!this.bracketData) {
       throw new Error('Bracket data not found');
     }
@@ -223,10 +230,22 @@ class TournamentStats {
     // Clear previous content
     this.elements.roundContent.innerHTML = '';
     
-    // Get matches for this round
-    const roundMatches = this.bracketData.completedMatches.filter(
-      match => match.round === roundNumber
-    );
+    // Get matches for this round - handle different data structures
+    let roundMatches = [];
+    
+    if (this.tournament.format === 'Americano' && this.bracketData.rounds) {
+      // For Americano format, get matches from rounds array
+      const roundData = this.bracketData.rounds.find(r => r.number === roundNumber);
+      if (roundData && roundData.matches) {
+        // Filter for completed matches only
+        roundMatches = roundData.matches.filter(m => m.completed);
+      }
+    } else if (this.bracketData.completedMatches) {
+      // For other formats, get from completedMatches array
+      roundMatches = this.bracketData.completedMatches.filter(
+        match => match.round === roundNumber
+      );
+    }
     
     if (roundMatches.length === 0) {
       this.elements.roundContent.innerHTML = `
@@ -238,10 +257,13 @@ class TournamentStats {
     // Group matches by court
     const courtMatches = {};
     roundMatches.forEach(match => {
-      if (!courtMatches[match.courtName]) {
-        courtMatches[match.courtName] = [];
+      // Handle different property names for court name
+      const courtName = match.courtName || match.court || 'Unknown Court';
+      
+      if (!courtMatches[courtName]) {
+        courtMatches[courtName] = [];
       }
-      courtMatches[match.courtName].push(match);
+      courtMatches[courtName].push(match);
     });
     
     // Create section for each court
@@ -455,25 +477,44 @@ class TournamentStats {
       averageScore: 0
     };
     
-    if (!this.bracketData.completedMatches || this.bracketData.completedMatches.length === 0) {
+    // Get completed matches based on tournament format
+    let completedMatches = [];
+    
+    if (this.tournament.format === 'Americano' && this.bracketData.rounds) {
+      // For Americano format, get completed matches from all rounds
+      this.bracketData.rounds.forEach(round => {
+        if (round.matches) {
+          const roundCompletedMatches = round.matches.filter(m => m.completed);
+          completedMatches = completedMatches.concat(roundCompletedMatches);
+        }
+      });
+    } else if (this.bracketData.completedMatches) {
+      // For other formats, use completedMatches array
+      completedMatches = this.bracketData.completedMatches;
+    }
+    
+    if (completedMatches.length === 0) {
       return stats;
     }
     
     const courtData = {};
     let totalScore = 0;
     
-    this.bracketData.completedMatches.forEach(match => {
+    completedMatches.forEach(match => {
+      // Handle different property names for court name
+      const courtName = match.courtName || match.court || 'Unknown Court';
+      
       // Initialize court data if needed
-      if (!courtData[match.courtName]) {
-        courtData[match.courtName] = {
-          name: match.courtName,
+      if (!courtData[courtName]) {
+        courtData[courtName] = {
+          name: courtName,
           matches: 0,
           totalPoints: 0,
           scoreDiffs: []
         };
       }
       
-      const court = courtData[match.courtName];
+      const court = courtData[courtName];
       const score1 = match.score1 || 0;
       const score2 = match.score2 || 0;
       const totalMatchPoints = score1 + score2;
