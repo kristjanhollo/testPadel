@@ -401,7 +401,7 @@ class TournamentBracketAmericano {
   
   checkAllMatchesCompleted() {
     if (!this.bracketData || !this.bracketData.rounds) return false;
-    
+    console.log(this.bracketData);
     // Check all matches in all rounds
     for (const round of this.bracketData.rounds) {
       for (const match of round.matches) {
