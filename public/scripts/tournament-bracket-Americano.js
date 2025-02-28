@@ -866,113 +866,110 @@ class TournamentBracketAmericano {
     }
     
     async updateMatchScore(matchId, team, score) {
-      try {
-        // Create a deep copy of bracket data to modify
-        const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-        
-        // Find the match in any round
-        let matchUpdated = false;
-        let currentRound = null;
-        
-        if (updatedBracketData && updatedBracketData.rounds) {
-          for (const round of updatedBracketData.rounds) {
-            if (!round || !Array.isArray(round.matches)) continue;
-            
-            const matchIndex = round.matches.findIndex(m => m && m.id === matchId);
-            if (matchIndex !== -1) {
-              if (team === 'team1') {
-                round.matches[matchIndex].score1 = score;
-              } else if (team === 'team2') {
-                round.matches[matchIndex].score2 = score;
-              }
+        try {
+          // Create a deep copy of bracket data to modify
+          const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
+          
+          // Find the match in any round
+          let matchUpdated = false;
+          let currentRound = null;
+          
+          if (updatedBracketData && updatedBracketData.rounds) {
+            for (const round of updatedBracketData.rounds) {
+              if (!round || !Array.isArray(round.matches)) continue;
               
-              // Auto-complete if both scores are set
-              if (round.matches[matchIndex].score1 !== null && round.matches[matchIndex].score2 !== null) {
-                round.matches[matchIndex].completed = true;
+              const matchIndex = round.matches.findIndex(m => m && m.id === matchId);
+              if (matchIndex !== -1) {
+                if (team === 'team1') {
+                  round.matches[matchIndex].score1 = score;
+                } else if (team === 'team2') {
+                  round.matches[matchIndex].score2 = score;
+                }
                 
-                // Check if we need to update the currentRound
-                if (round.number === updatedBracketData.currentRound) {
-                  // Check if this round is completed
-                  const isRoundComplete = round.matches.every(m => m && m.completed);
-                  if (isRoundComplete && round.number < 4) {
-                    // Auto-advance to next round
-                    updatedBracketData.currentRound = round.number + 1;
-                    round.completed = true;
+                // Auto-complete if both scores are set
+                if (round.matches[matchIndex].score1 !== null && round.matches[matchIndex].score2 !== null) {
+                  round.matches[matchIndex].completed = true;
+                  
+                  // Check if round is completed
+                  if (round.number === updatedBracketData.currentRound) {
+                    const isRoundComplete = round.matches.every(m => m && m.completed);
+                    if (isRoundComplete && round.number < 4) {
+                      updatedBracketData.currentRound = round.number + 1;
+                      round.completed = true;
+                    }
                   }
                 }
+                
+                matchUpdated = true;
+                currentRound = round.number;
+                break;
               }
-              
-              matchUpdated = true;
-              currentRound = round.number;
-              break;
             }
           }
-        }
-        
-        if (matchUpdated) {
-          // Add to completedMatches if the match is completed
-          if (currentRound === updatedBracketData.currentRound) {
-            const matchInRound = updatedBracketData.rounds.find(r => r && r.number === currentRound)
-              ?.matches.find(m => m && m.id === matchId);
-            
-            if (matchInRound && matchInRound.completed) {
-              // Check if not already in completedMatches
-              const existingIndex = updatedBracketData.completedMatches.findIndex(m => m && m.id === matchId);
-              if (existingIndex === -1) {
-                updatedBracketData.completedMatches.push({...matchInRound});
-              } else {
-                updatedBracketData.completedMatches[existingIndex] = {...matchInRound};
+          
+          if (matchUpdated) {
+            // Add to completedMatches if the match is completed
+            if (currentRound === updatedBracketData.currentRound) {
+              const matchInRound = updatedBracketData.rounds.find(r => r && r.number === currentRound)
+                ?.matches.find(m => m && m.id === matchId);
+              
+              if (matchInRound && matchInRound.completed) {
+                // Check if not already in completedMatches
+                const existingIndex = updatedBracketData.completedMatches.findIndex(m => m && m.id === matchId);
+                if (existingIndex === -1) {
+                  updatedBracketData.completedMatches.push({...matchInRound});
+                } else {
+                  updatedBracketData.completedMatches[existingIndex] = {...matchInRound};
+                }
+                
+                // Update standings
+                this.updateStandingsWithMatch(updatedBracketData, matchInRound);
               }
-              
-              // Update standings
-              this.updateStandingsWithMatch(updatedBracketData, matchInRound);
             }
-          }
-          
-          // Save to Firebase using Americano specific method
-          await firebaseService.saveTournamentBracketAmericano(
-            this.selectedTournamentId,
-            updatedBracketData
-          );
-          
-          // Update the UI to reflect changes
-          this.bracketData = updatedBracketData;
-          this.currentRound = updatedBracketData.currentRound;
-          this.renderStandings();
-          this.updateCurrentRoundDisplay();
-          this.setupRoundTabs();
-          
-          // If round changed, update the view
-          if (this.currentRound !== currentRound) {
-            this.showRound(this.currentRound);
             
-            // Notify user of round advancement
-            try {
-              Swal.fire({
-                title: 'Round Complete!',
-                text: `Moving to Round ${this.currentRound}`,
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-              });
-            } catch (e) {
-              console.log(`Round complete! Moving to Round ${this.currentRound}`);
+            // Save to Firebase
+            await firebaseService.saveTournamentBracketAmericano(
+              this.selectedTournamentId, 
+              updatedBracketData
+            );
+            
+            // Update local data
+            this.bracketData = updatedBracketData;
+            this.currentRound = updatedBracketData.currentRound;
+            
+            // ONLY update standings, not re-render everything
+            this.renderStandings();
+            
+            // If round changed, update the view - CAREFULLY!
+            if (this.currentRound !== currentRound && this.showRound) {
+              this.showRound(this.currentRound);
+              
+              try {
+                Swal.fire({
+                  title: 'Round Complete!',
+                  text: `Moving to Round ${this.currentRound}`,
+                  icon: 'success',
+                  timer: 2000,
+                  showConfirmButton: false
+                });
+              } catch (e) {
+                alert(`Round complete! Moving to Round ${this.currentRound}`);
+              }
             }
           }
-        }
-      } catch (error) {
-        console.error('Error updating match score:', error);
-        try {
-          Swal.fire({
-            title: 'Error',
-            text: 'Failed to update score. Please try again.',
-            icon: 'error'
-          });
-        } catch (e) {
-          alert('Error: Failed to update score. Please try again.');
+        } catch (error) {
+          console.error('Error updating match score:', error);
+          try {
+            Swal.fire({
+              title: 'Error',
+              text: 'Failed to update score. Please try again.',
+              icon: 'error'
+            });
+          } catch (e) {
+            alert('Error: Failed to update score. Please try again.');
+          }
         }
       }
-    }
     
     // Update standings for a single match
     updateStandingsWithMatch(bracketData, match) {
@@ -1044,10 +1041,54 @@ class TournamentBracketAmericano {
   
   // Initialize when DOM is ready
   document.addEventListener('DOMContentLoaded', () => {
-    const bracketApp = new TournamentBracketAmericano();
+    window.bracketApp = new TournamentBracketAmericano();
+    
+    // Global function to make score editable (restore original behavior)
+window.handleScoreChange = function(event) {
+    const input = event.target;
+    const matchId = input.dataset.matchId;
+    const team = input.dataset.team;
+    const score = parseInt(input.value, 10);
+    
+    if (isNaN(score) || score < 0) {
+      input.value = '';
+      return;
+    }
+    
+    if (window.bracketApp) {
+      window.bracketApp.updateMatchScore(matchId, team, score);
+    }
+  };
+  
+  // Make score fields editable with keyboard navigation
+  window.makeScoreEditable = function(element, matchId, team) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'score-input';
+    input.value = element.textContent !== '-' ? element.textContent : '';
+    input.min = 0;
+    input.dataset.matchId = matchId;
+    input.dataset.team = team;
+  
+    input.onblur = () => {
+      const score = input.value ? parseInt(input.value) : null;
+      window.handleScoreChange({target: input});
+      element.textContent = score ?? '-';
+    };
+  
+    input.onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
+      }
+    };
+  
+    element.textContent = '';
+    element.appendChild(input);
+    input.focus();
+  };
     
     // Set up cleanup on page unload
     window.addEventListener('beforeunload', () => {
-      bracketApp.cleanup();
+      window.bracketApp.cleanup();
     });
   });

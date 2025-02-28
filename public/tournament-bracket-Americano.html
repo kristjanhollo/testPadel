@@ -152,13 +152,46 @@
     </template>
 
     <script>
-        // Global function for score changes
-        function handleScoreChange(event) {
-            // This will be connected to the class method
-            if (window.bracketApp) {
-                window.bracketApp.handleScoreChange(event);
+        // Lihtsustatud skoori sisestamise funktsioon
+        window.makeScoreEditable = function(element, matchId, team) {
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.className = 'score-input';
+          input.value = element.textContent !== '-' ? element.textContent : '';
+          input.min = 0;
+          input.dataset.matchId = matchId;
+          input.dataset.team = team;
+      
+          // Salvestame ainult kui Enter vajutatakse või klikitakse mujale
+          input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+              saveAndExit();
             }
-        }
-    </script>
+          });
+      
+          // Blur sündmus - salvestame ainult kui klikitakse mujale, mitte TAB vajutamisel
+          input.addEventListener('blur', () => {
+            // Väike viivitus, et näha kas tegu on TAB navigatsiooniga
+            setTimeout(() => {
+              // Kui input element on endiselt dokumendis, siis pole vaja salvestada
+              if (!document.contains(input)) return;
+              saveAndExit();
+            }, 50);
+          });
+      
+          function saveAndExit() {
+            const score = input.value ? parseInt(input.value) : null;
+            element.textContent = score !== null ? score : '-';
+            
+            if (window.bracketApp) {
+              window.bracketApp.updateMatchScore(matchId, team, score);
+            }
+          }
+      
+          element.textContent = '';
+          element.appendChild(input);
+          input.focus();
+        };
+      </script>
 </body>
 </html>
