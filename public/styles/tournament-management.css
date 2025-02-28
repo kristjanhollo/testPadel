@@ -311,6 +311,7 @@
   padding: 8px 12px;
   margin-bottom: 8px;
   cursor: move;
+  position: relative;
 }
 
 .player-in-group:hover {
@@ -319,11 +320,44 @@
 
 .player-name {
   font-weight: 500;
+  flex: 1;
+  margin-left: 30px; /* Space for controls */
 }
 
 .player-rating {
-  color: #64748b;
+  color: #eab308;
+  font-weight: bold;
   font-size: 0.9em;
+}
+
+.player-controls {
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.player-controls button {
+  background: none;
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0;
+  width: 20px;
+  height: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-controls button:hover {
+  color: #2563eb;
+  background-color: #f1f5f9;
 }
 
 /* Drag and Drop Styles */

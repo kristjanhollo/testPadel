@@ -52,11 +52,24 @@ class TournamentManager {
       this.initializeSearchFunctionality();
       this.updateTournamentDisplay();
       
-      // Show group assignments section if format is Americano
+      // Show/hide sections based on tournament format
       if (this.tournamentData && this.tournamentData.format === 'Americano') {
+        // For Americano format, show group assignments and hide court assignments
         this.showGroupAssignmentsSection();
         this.initializeGroupAssignments();
         this.initializeGroupDragAndDrop();
+        
+        // Hide court assignments section
+        const courtsSection = document.querySelector('.courts-section');
+        if (courtsSection) {
+          courtsSection.style.display = 'none';
+        }
+      } else {
+        // For other formats, hide group assignments
+        const groupAssignmentsSection = document.getElementById('groupAssignmentsSection');
+        if (groupAssignmentsSection) {
+          groupAssignmentsSection.style.display = 'none';
+        }
       }
     } catch (error) {
       Swal.close();
@@ -308,28 +321,110 @@ class TournamentManager {
       this.tournamentPlayers = this.registeredPlayers.slice(0, 16);
     }
 
-    const topPlayers = [...this.tournamentPlayers]
-      .sort((a, b) => b.ranking - a.ranking)
-      .slice(0, 16);
-
-    topPlayers.forEach((player, index) => {
-      const courtIndex = Math.floor(index / 4);
-      const team = index % 4 === 0 || index % 4 === 3 ? 1 : 2;
-      const position = index % 2 === 0 ? 1 : 2;
+    // Check if we have Americano format and players have group info
+    if (this.tournamentData && this.tournamentData.format === 'Americano') {
+      // Group players by their group
+      const groupedPlayers = {
+        green: [],
+        blue: [],
+        yellow: [],
+        pink: []
+      };
       
-      const slot = document.querySelector(
-        `.player-slot[data-court="court-${courtIndex + 1}"][data-team="${team}"][data-position="${position}"]`
-      );
-
-      if (slot) {
-        slot.innerHTML = '';
-        const playerCard = this.createPlayerCard(player, true);
-        slot.appendChild(playerCard);
-        slot.classList.add('filled');
-        this.assignedPlayers.add(player.id);
-        this.updatePlayerCardState(player.id, true);
+      // First, try to use existing group info
+      this.tournamentPlayers.forEach(player => {
+        if (player.group && groupedPlayers[player.group]) {
+          groupedPlayers[player.group].push(player);
+        }
+      });
+      
+      // If any group is empty, assign players by rating
+      const hasEmptyGroups = Object.values(groupedPlayers).some(group => group.length === 0);
+      
+      if (hasEmptyGroups) {
+        // Reset groups
+        groupedPlayers.green = [];
+        groupedPlayers.blue = [];
+        groupedPlayers.yellow = [];
+        groupedPlayers.pink = [];
+        
+        // Sort players by rating
+        const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+        
+        // Distribute players to groups
+        const groupSize = Math.ceil(sortedPlayers.length / 4);
+        
+        sortedPlayers.forEach((player, index) => {
+          if (index < groupSize) {
+            groupedPlayers.green.push(player);
+            player.group = 'green';
+          } else if (index < groupSize * 2) {
+            groupedPlayers.blue.push(player);
+            player.group = 'blue';
+          } else if (index < groupSize * 3) {
+            groupedPlayers.yellow.push(player);
+            player.group = 'yellow';
+          } else {
+            groupedPlayers.pink.push(player);
+            player.group = 'pink';
+          }
+        });
       }
-    });
+      
+      // Assign players to courts based on their groups
+      const groupColors = ['green', 'blue', 'yellow', 'pink'];
+      
+      groupColors.forEach((color, courtIndex) => {
+        const players = groupedPlayers[color];
+        
+        // Sort players by rating within each group
+        players.sort((a, b) => b.ranking - a.ranking);
+        
+        // Assign players to slots according to Americano format
+        // For Round 1: 1&4 vs 2&3
+        if (players.length >= 4) {
+          // Team 1: Player 1 (highest rating)
+          this.assignPlayerToSlot(players[0], `court-${courtIndex + 1}`, 1, 1);
+          
+          // Team 1: Player 4 (lowest rating of the four)
+          this.assignPlayerToSlot(players[3], `court-${courtIndex + 1}`, 1, 2);
+          
+          // Team 2: Player 2 (second highest rating)
+          this.assignPlayerToSlot(players[1], `court-${courtIndex + 1}`, 2, 1);
+          
+          // Team 2: Player 3 (third highest rating)
+          this.assignPlayerToSlot(players[2], `court-${courtIndex + 1}`, 2, 2);
+        }
+      });
+    } else {
+      // For non-Americano formats, use the original logic
+      const topPlayers = [...this.tournamentPlayers]
+        .sort((a, b) => b.ranking - a.ranking)
+        .slice(0, 16);
+
+      topPlayers.forEach((player, index) => {
+        const courtIndex = Math.floor(index / 4);
+        const team = index % 4 === 0 || index % 4 === 3 ? 1 : 2;
+        const position = index % 2 === 0 ? 1 : 2;
+        
+        this.assignPlayerToSlot(player, `court-${courtIndex + 1}`, team, position);
+      });
+    }
+  }
+  
+  assignPlayerToSlot(player, courtId, team, position) {
+    const slot = document.querySelector(
+      `.player-slot[data-court="${courtId}"][data-team="${team}"][data-position="${position}"]`
+    );
+
+    if (slot) {
+      slot.innerHTML = '';
+      const playerCard = this.createPlayerCard(player, true);
+      slot.appendChild(playerCard);
+      slot.classList.add('filled');
+      this.assignedPlayers.add(player.id);
+      this.updatePlayerCardState(player.id, true);
+    }
   }
 
   initializeCourts() {
@@ -866,6 +961,10 @@ class TournamentManager {
     playerCard.dataset.player = JSON.stringify(player);
     
     playerCard.innerHTML = `
+      <div class="player-controls">
+        <button class="move-up" title="Move Up">▲</button>
+        <button class="move-down" title="Move Down">▼</button>
+      </div>
       <span class="player-name">${player.name}</span>
       <span class="player-rating">${player.ranking || 'N/A'}</span>
     `;
@@ -880,7 +979,37 @@ class TournamentManager {
       playerCard.classList.remove('dragging');
     });
     
+    // Setup move up/down buttons
+    const moveUpBtn = playerCard.querySelector('.move-up');
+    const moveDownBtn = playerCard.querySelector('.move-down');
+    
+    moveUpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.movePlayerUp(playerCard);
+    });
+    
+    moveDownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.movePlayerDown(playerCard);
+    });
+    
     return playerCard;
+  }
+  
+  movePlayerUp(playerCard) {
+    const prevSibling = playerCard.previousElementSibling;
+    if (prevSibling) {
+      const parent = playerCard.parentNode;
+      parent.insertBefore(playerCard, prevSibling);
+    }
+  }
+  
+  movePlayerDown(playerCard) {
+    const nextSibling = playerCard.nextElementSibling;
+    if (nextSibling) {
+      const parent = playerCard.parentNode;
+      parent.insertBefore(nextSibling, playerCard);
+    }
   }
   
   initializeGroupDragAndDrop() {
@@ -962,10 +1091,11 @@ class TournamentManager {
       const groupedPlayers = [];
       
       // Green group
-      document.querySelectorAll('#greenGroupPlayers .player-in-group').forEach(card => {
+      document.querySelectorAll('#greenGroupPlayers .player-in-group').forEach((card, index) => {
         try {
           const player = JSON.parse(card.dataset.player);
           player.group = 'green';
+          player.groupOrder = index; // Save the order within the group
           groupedPlayers.push(player);
         } catch (error) {
           console.warn('Error parsing player data:', error);
@@ -973,10 +1103,11 @@ class TournamentManager {
       });
       
       // Blue group
-      document.querySelectorAll('#blueGroupPlayers .player-in-group').forEach(card => {
+      document.querySelectorAll('#blueGroupPlayers .player-in-group').forEach((card, index) => {
         try {
           const player = JSON.parse(card.dataset.player);
           player.group = 'blue';
+          player.groupOrder = index; // Save the order within the group
           groupedPlayers.push(player);
         } catch (error) {
           console.warn('Error parsing player data:', error);
@@ -984,10 +1115,11 @@ class TournamentManager {
       });
       
       // Yellow group
-      document.querySelectorAll('#yellowGroupPlayers .player-in-group').forEach(card => {
+      document.querySelectorAll('#yellowGroupPlayers .player-in-group').forEach((card, index) => {
         try {
           const player = JSON.parse(card.dataset.player);
           player.group = 'yellow';
+          player.groupOrder = index; // Save the order within the group
           groupedPlayers.push(player);
         } catch (error) {
           console.warn('Error parsing player data:', error);
@@ -995,10 +1127,11 @@ class TournamentManager {
       });
       
       // Pink group
-      document.querySelectorAll('#pinkGroupPlayers .player-in-group').forEach(card => {
+      document.querySelectorAll('#pinkGroupPlayers .player-in-group').forEach((card, index) => {
         try {
           const player = JSON.parse(card.dataset.player);
           player.group = 'pink';
+          player.groupOrder = index; // Save the order within the group
           groupedPlayers.push(player);
         } catch (error) {
           console.warn('Error parsing player data:', error);
@@ -1010,6 +1143,7 @@ class TournamentManager {
         const groupedPlayer = groupedPlayers.find(p => p.id === player.id);
         if (groupedPlayer) {
           player.group = groupedPlayer.group;
+          player.groupOrder = groupedPlayer.groupOrder;
         }
         return player;
       });
@@ -1021,7 +1155,20 @@ class TournamentManager {
       );
       
       Swal.close();
-      Swal.fire('Saved!', 'Group assignments have been saved.', 'success');
+      
+      // Ask if user wants to go directly to the bracket view
+      const result = await Swal.fire({
+        title: 'Groups Saved!',
+        text: 'Do you want to go to the tournament bracket now?',
+        icon: 'success',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, go to bracket',
+        cancelButtonText: 'No, stay here'
+      });
+      
+      if (result.isConfirmed) {
+        window.location.href = 'tournament-bracket-Americano.html';
+      }
       
     } catch (error) {
       Swal.close();

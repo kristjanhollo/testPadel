@@ -118,23 +118,39 @@ class TournamentBracketAmericano {
       } else {
         this.currentRound = this.bracketData.currentRound || 1;
         
-        // Check if all rounds have matches
-        let needToCreateRounds = false;
-        if (this.bracketData.rounds) {
+        // Check if players have groupOrder property - this indicates groups were manually arranged
+        const hasGroupOrder = this.players.some(p => typeof p.groupOrder === 'number');
+        
+        // Always recreate rounds if players have groupOrder (user has manually arranged groups)
+        let needToCreateRounds = hasGroupOrder;
+        
+        // Also check if rounds are empty
+        if (!needToCreateRounds && this.bracketData.rounds) {
           for (const round of this.bracketData.rounds) {
             if (!round.matches || round.matches.length === 0) {
               needToCreateRounds = true;
               break;
             }
           }
-        } else {
+        } else if (!this.bracketData.rounds) {
           needToCreateRounds = true;
         }
         
         // Create rounds if needed
         if (needToCreateRounds) {
+          console.log('Recreating rounds based on current player groups');
+          
           // Tühjenda olemasolevad mängud
-          this.bracketData.rounds.forEach(round => round.matches = []);
+          if (this.bracketData.rounds) {
+            this.bracketData.rounds.forEach(round => round.matches = []);
+          } else {
+            this.bracketData.rounds = [
+              { number: 1, completed: false, matches: [] },
+              { number: 2, completed: false, matches: [] },
+              { number: 3, completed: false, matches: [] },
+              { number: 4, completed: false, matches: [] }
+            ];
+          }
           
           // Group players by their group color
           const groupedPlayers = {
@@ -143,6 +159,13 @@ class TournamentBracketAmericano {
             yellow: this.players.filter(p => this.determineInitialGroup(p) === 'yellow'),
             pink: this.players.filter(p => this.determineInitialGroup(p) === 'pink')
           };
+          
+          console.log('Player groups for bracket creation:', {
+            green: groupedPlayers.green.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+            blue: groupedPlayers.blue.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+            yellow: groupedPlayers.yellow.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+            pink: groupedPlayers.pink.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`)
+          });
           
           // Create all rounds
           this.createAllRounds(this.bracketData);
@@ -604,6 +627,12 @@ class TournamentBracketAmericano {
   }
   
   determineInitialGroup(player) {
+    // First check if player already has a group assigned
+    if (player.group && ['green', 'blue', 'yellow', 'pink'].includes(player.group)) {
+      return player.group;
+    }
+    
+    // If no group is assigned, determine based on rating
     // Sort all players by rating
     const sortedPlayers = this.sortPlayersByRating(this.players);
     
@@ -647,12 +676,28 @@ class TournamentBracketAmericano {
     
     console.log(`\n----- Creating matches for ${courtName} (${groupColor}) -----`);
     
-    // Sort by rating within group
-    const sortedPlayers = this.sortPlayersByRating(groupPlayers);
+    // First check if players have groupOrder property (saved order from tournament management)
+    const hasGroupOrder = groupPlayers.some(p => typeof p.groupOrder === 'number');
     
-    console.log("Players in group (sorted by rating):");
+    // Sort players by groupOrder if available, otherwise by rating
+    let sortedPlayers;
+    if (hasGroupOrder) {
+      sortedPlayers = [...groupPlayers].sort((a, b) => {
+        // Use groupOrder if both have it
+        if (typeof a.groupOrder === 'number' && typeof b.groupOrder === 'number') {
+          return a.groupOrder - b.groupOrder;
+        }
+        // Fall back to rating if groupOrder is missing
+        return (b.ranking || 0) - (a.ranking || 0);
+      });
+      console.log("Players in group (sorted by saved order):");
+    } else {
+      sortedPlayers = this.sortPlayersByRating(groupPlayers);
+      console.log("Players in group (sorted by rating):");
+    }
+    
     sortedPlayers.forEach((player, idx) => {
-      console.log(`  ${idx+1}. ${player.name} (${player.ranking || player.rating || 0})`);
+      console.log(`  ${idx+1}. ${player.name} (${player.ranking || player.rating || 0})${typeof player.groupOrder === 'number' ? ` [order: ${player.groupOrder}]` : ''}`);
     });
     
     // Create teams based on provided indices pattern
@@ -693,55 +738,87 @@ class TournamentBracketAmericano {
     const roundData = bracketData.rounds.find(r => r.number === 3);
     if (!roundData) return;
     
-    // Sort each group by rating
-    const sortedGroups = {
-      green: this.sortPlayersByRating(groupedPlayers.green),
-      blue: this.sortPlayersByRating(groupedPlayers.blue),
-      yellow: this.sortPlayersByRating(groupedPlayers.yellow),
-      pink: this.sortPlayersByRating(groupedPlayers.pink)
+    // Check if players have groupOrder property
+    const hasGroupOrder = {
+      green: groupedPlayers.green.some(p => typeof p.groupOrder === 'number'),
+      blue: groupedPlayers.blue.some(p => typeof p.groupOrder === 'number'),
+      yellow: groupedPlayers.yellow.some(p => typeof p.groupOrder === 'number'),
+      pink: groupedPlayers.pink.some(p => typeof p.groupOrder === 'number')
     };
     
-    // Create mix matches according to rules
-    // Green + Blue mix
+    // Sort each group by groupOrder if available, otherwise by rating
+    const sortedGroups = {
+      green: hasGroupOrder.green ? 
+        [...groupedPlayers.green].sort((a, b) => (a.groupOrder || 0) - (b.groupOrder || 0)) : 
+        this.sortPlayersByRating(groupedPlayers.green),
+      
+      blue: hasGroupOrder.blue ? 
+        [...groupedPlayers.blue].sort((a, b) => (a.groupOrder || 0) - (b.groupOrder || 0)) : 
+        this.sortPlayersByRating(groupedPlayers.blue),
+      
+      yellow: hasGroupOrder.yellow ? 
+        [...groupedPlayers.yellow].sort((a, b) => (a.groupOrder || 0) - (b.groupOrder || 0)) : 
+        this.sortPlayersByRating(groupedPlayers.yellow),
+      
+      pink: hasGroupOrder.pink ? 
+        [...groupedPlayers.pink].sort((a, b) => (a.groupOrder || 0) - (b.groupOrder || 0)) : 
+        this.sortPlayersByRating(groupedPlayers.pink)
+    };
+    
+    console.log("Mix round sorted groups:", {
+      green: sortedGroups.green.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      blue: sortedGroups.blue.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      yellow: sortedGroups.yellow.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      pink: sortedGroups.pink.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`)
+    });
+    
+    // Create mix matches according to Exceli table rules
+    console.log("Creating Mix Round matches according to Exceli table rules");
+    
+    // Green + Blue mix (Padel Arenas + Coolbet)
     if (sortedGroups.green.length >= 2 && sortedGroups.blue.length >= 2) {
-      // Green 1 & Blue 6 vs Green 2 & Blue 5
+      // Green 1 & Blue 2 vs Green 2 & Blue 1
+      console.log("Creating match: Green 1 & Blue 2 vs Green 2 & Blue 1");
       this.createMixMatch(
         roundData,
-        [sortedGroups.green[0], sortedGroups.blue[Math.min(5, sortedGroups.blue.length - 1)]],
-        [sortedGroups.green[1], sortedGroups.blue[Math.min(4, sortedGroups.blue.length - 2)]],
+        [sortedGroups.green[0], sortedGroups.blue[1]],  // Green 1 & Blue 2
+        [sortedGroups.green[1], sortedGroups.blue[0]],  // Green 2 & Blue 1
         'Mix Round',
         'mix'
       );
       
       if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 4) {
-        // Green 3 & Blue 8 vs Green 4 & Blue 7
+        // Green 3 & Blue 4 vs Green 4 & Blue 3
+        console.log("Creating match: Green 3 & Blue 4 vs Green 4 & Blue 3");
         this.createMixMatch(
           roundData,
-          [sortedGroups.green[2], sortedGroups.blue[Math.min(7, sortedGroups.blue.length - 1)]],
-          [sortedGroups.green[3], sortedGroups.blue[Math.min(6, sortedGroups.blue.length - 2)]],
+          [sortedGroups.green[2], sortedGroups.blue[3]],  // Green 3 & Blue 4
+          [sortedGroups.green[3], sortedGroups.blue[2]],  // Green 4 & Blue 3
           'Mix Round',
           'mix'
         );
       }
     }
     
-    // Yellow + Pink mix
+    // Yellow + Pink mix (Lux Express + 3p Logistics)
     if (sortedGroups.yellow.length >= 2 && sortedGroups.pink.length >= 2) {
-      // Yellow 1 & Pink 4 vs Yellow 2 & Pink 3
+      // Yellow 1 & Pink 2 vs Yellow 2 & Pink 1
+      console.log("Creating match: Yellow 1 & Pink 2 vs Yellow 2 & Pink 1");
       this.createMixMatch(
         roundData,
-        [sortedGroups.yellow[0], sortedGroups.pink[Math.min(3, sortedGroups.pink.length - 1)]],
-        [sortedGroups.yellow[1], sortedGroups.pink[Math.min(2, sortedGroups.pink.length - 2)]],
+        [sortedGroups.yellow[0], sortedGroups.pink[1]],  // Yellow 1 & Pink 2
+        [sortedGroups.yellow[1], sortedGroups.pink[0]],  // Yellow 2 & Pink 1
         'Mix Round',
         'mix'
       );
       
       if (sortedGroups.yellow.length >= 4 && sortedGroups.pink.length >= 4) {
-        // Yellow 3 & Pink 2 vs Yellow 4 & Pink 1
+        // Yellow 3 & Pink 4 vs Yellow 4 & Pink 3
+        console.log("Creating match: Yellow 3 & Pink 4 vs Yellow 4 & Pink 3");
         this.createMixMatch(
           roundData,
-          [sortedGroups.yellow[2], sortedGroups.pink[1]],
-          [sortedGroups.yellow[3], sortedGroups.pink[0]],
+          [sortedGroups.yellow[2], sortedGroups.pink[3]],  // Yellow 3 & Pink 4
+          [sortedGroups.yellow[3], sortedGroups.pink[2]],  // Yellow 4 & Pink 3
           'Mix Round',
           'mix'
         );
