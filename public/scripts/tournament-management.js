@@ -51,6 +51,13 @@ class TournamentManager {
       this.initializeDragAndDrop();
       this.initializeSearchFunctionality();
       this.updateTournamentDisplay();
+      
+      // Show group assignments section if format is Americano
+      if (this.tournamentData && this.tournamentData.format === 'Americano') {
+        this.showGroupAssignmentsSection();
+        this.initializeGroupAssignments();
+        this.initializeGroupDragAndDrop();
+      }
     } catch (error) {
       Swal.close();
       console.error('Error initializing tournament management:', error);
@@ -454,36 +461,51 @@ class TournamentManager {
           ],
           completedMatches: [],
           standings: this.tournamentPlayers.slice(0, 16).map(player => {
-            // Determine group based on rank
-            const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
-            const playerIndex = sortedPlayers.findIndex(p => p.id === player.id);
-            const groupSize = Math.ceil(sortedPlayers.length / 4);
-            
-            let group = 'green';
-            if (playerIndex < groupSize) {
-              group = 'green'; // Top group
-            } else if (playerIndex < groupSize * 2) {
-              group = 'blue'; // Second group
-            } else if (playerIndex < groupSize * 3) {
-              group = 'yellow'; // Third group
+            // Use player's group if it exists, otherwise determine based on rank
+            if (player.group) {
+              return {
+                id: player.id,
+                name: player.name,
+                group: player.group,
+                points: 0,
+                gamesPlayed: 0,
+                wins: 0,
+                losses: 0
+              };
             } else {
-              group = 'pink'; // Bottom group
+              // Determine group based on rank
+              const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+              const playerIndex = sortedPlayers.findIndex(p => p.id === player.id);
+              const groupSize = Math.ceil(sortedPlayers.length / 4);
+              
+              let group = 'green';
+              if (playerIndex < groupSize) {
+                group = 'green'; // Top group
+              } else if (playerIndex < groupSize * 2) {
+                group = 'blue'; // Second group
+              } else if (playerIndex < groupSize * 3) {
+                group = 'yellow'; // Third group
+              } else {
+                group = 'pink'; // Bottom group
+              }
+              
+              return {
+                id: player.id,
+                name: player.name,
+                group: group,
+                points: 0,
+                gamesPlayed: 0,
+                wins: 0,
+                losses: 0
+              };
             }
-            
-            return {
-              id: player.id,
-              name: player.name,
-              group: group,
-              points: 0,
-              gamesPlayed: 0,
-              wins: 0,
-              losses: 0
-            };
           })
         };
         
         // Add matches to the first round
         const firstRound = americanoBracketData.rounds[0];
+        
+        console.log("===== AMERICANO FORMAADI PAARIDE MOODUSTAMINE =====");
         
         // Group players by their assigned courts (which reflects their group)
         this.COURT_ORDER.forEach((courtName, index) => {
@@ -491,12 +513,30 @@ class TournamentManager {
           const courtPlayers = this.getPlayersForCourt(courtId);
           const groupColor = ['green', 'blue', 'yellow', 'pink'][index];
           
+          console.log(`\n----- TÖÖTLEN VÄLJAKUT: ${courtName} (${groupColor}) -----`);
+          
           if (courtPlayers.length === 4) {
+            // Log players before sorting
+            console.log("MÄNGIJAD ENNE SORTEERIMIST:", 
+              courtPlayers.map(p => `${p.name} (${p.ranking || 0})`).join(", "));
+            
+            // Sort players by rating before creating pairs
+            const sortedPlayers = [...courtPlayers].sort((a, b) => b.ranking - a.ranking);
+            
+            // Log players after sorting
+            console.log("MÄNGIJAD PÄRAST SORTEERIMIST:", 
+              sortedPlayers.map((p, i) => `${i+1}. ${p.name} (${p.ranking || 0})`).join(", "));
+            
+            // Americano format for Round 1: 1&4 vs 2&3 (according to the table)
+            console.log("PAARIDE MOODUSTAMINE AMERICANO REEGLITE JÄRGI (1&4 vs 2&3):");
+            console.log(`TEAM1: ${sortedPlayers[0].name} & ${sortedPlayers[3].name} (nr 1 & nr 4)`);
+            console.log(`TEAM2: ${sortedPlayers[1].name} & ${sortedPlayers[2].name} (nr 2 & nr 3)`);
+            
             const match = {
               id: `match-${Date.now()}-1-${groupColor}-${index}`,
               court: courtName,
-              team1: [courtPlayers[0], courtPlayers[1]],
-              team2: [courtPlayers[2], courtPlayers[3]],
+              team1: [sortedPlayers[0], sortedPlayers[3]], // 1&4 (highest and lowest)
+              team2: [sortedPlayers[1], sortedPlayers[2]], // 2&3 (second and third highest)
               score1: null,
               score2: null,
               completed: false,
@@ -505,8 +545,16 @@ class TournamentManager {
             };
             
             firstRound.matches.push(match);
+            
+            console.log(`LOODUD MÄNG VÄLJAKUL ${courtName}:`);
+            console.log(`  TEAM1: ${match.team1.map(p => p.name).join(" & ")}`);
+            console.log(`  TEAM2: ${match.team2.map(p => p.name).join(" & ")}`);
+          } else {
+            console.warn(`VIGA: Väljakul ${courtName} pole piisavalt mängijaid (${courtPlayers.length})`);
           }
         });
+        
+        console.log("===== AMERICANO FORMAADI PAARIDE MOODUSTAMINE LÕPETATUD =====");
         
         // Save using Americano specific method
         await firebaseService.saveTournamentBracketAmericano(
@@ -751,6 +799,251 @@ class TournamentManager {
     if (playerCard) {
       playerCard.classList.toggle('assigned', isAssigned);
     }
+  }
+  
+  // Group Assignments Section Functions
+  showGroupAssignmentsSection() {
+    const groupAssignmentsSection = document.getElementById('groupAssignmentsSection');
+    if (groupAssignmentsSection) {
+      groupAssignmentsSection.style.display = 'block';
+      
+      // Initialize controls
+      const saveGroupsBtn = document.getElementById('saveGroups');
+      const resetGroupsBtn = document.getElementById('resetGroups');
+      
+      if (saveGroupsBtn) {
+        saveGroupsBtn.addEventListener('click', () => this.saveGroups());
+      }
+      
+      if (resetGroupsBtn) {
+        resetGroupsBtn.addEventListener('click', () => this.resetGroups());
+      }
+    }
+  }
+  
+  initializeGroupAssignments() {
+    // Sort players by rating
+    const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+    
+    // Clear group containers
+    document.getElementById('greenGroupPlayers').innerHTML = '';
+    document.getElementById('blueGroupPlayers').innerHTML = '';
+    document.getElementById('yellowGroupPlayers').innerHTML = '';
+    document.getElementById('pinkGroupPlayers').innerHTML = '';
+    
+    // Distribute players to groups based on rating
+    const groupSize = Math.ceil(sortedPlayers.length / 4);
+    
+    sortedPlayers.forEach((player, index) => {
+      let groupContainer;
+      
+      if (index < groupSize) {
+        groupContainer = document.getElementById('greenGroupPlayers');
+        player.group = 'green';
+      } else if (index < groupSize * 2) {
+        groupContainer = document.getElementById('blueGroupPlayers');
+        player.group = 'blue';
+      } else if (index < groupSize * 3) {
+        groupContainer = document.getElementById('yellowGroupPlayers');
+        player.group = 'yellow';
+      } else {
+        groupContainer = document.getElementById('pinkGroupPlayers');
+        player.group = 'pink';
+      }
+      
+      if (groupContainer) {
+        const playerCard = this.createPlayerInGroup(player);
+        groupContainer.appendChild(playerCard);
+      }
+    });
+  }
+  
+  createPlayerInGroup(player) {
+    const playerCard = document.createElement('div');
+    playerCard.className = 'player-in-group';
+    playerCard.id = `group-${player.id}`;
+    playerCard.draggable = true;
+    playerCard.dataset.player = JSON.stringify(player);
+    
+    playerCard.innerHTML = `
+      <span class="player-name">${player.name}</span>
+      <span class="player-rating">${player.ranking || 'N/A'}</span>
+    `;
+    
+    // Setup drag listeners
+    playerCard.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('application/json', JSON.stringify(player));
+      playerCard.classList.add('dragging');
+    });
+    
+    playerCard.addEventListener('dragend', () => {
+      playerCard.classList.remove('dragging');
+    });
+    
+    return playerCard;
+  }
+  
+  initializeGroupDragAndDrop() {
+    const groupContainers = [
+      document.getElementById('greenGroupPlayers'),
+      document.getElementById('blueGroupPlayers'),
+      document.getElementById('yellowGroupPlayers'),
+      document.getElementById('pinkGroupPlayers')
+    ];
+    
+    groupContainers.forEach(container => {
+      if (container) {
+        this.setupGroupDropZone(container);
+      }
+    });
+  }
+  
+  setupGroupDropZone(element) {
+    element.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      element.classList.add('drag-over');
+    });
+    
+    element.addEventListener('dragleave', () => {
+      element.classList.remove('drag-over');
+    });
+    
+    element.addEventListener('drop', (e) => this.handleGroupDrop(e, element));
+  }
+  
+  handleGroupDrop(e, dropZone) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    
+    try {
+      const playerData = JSON.parse(e.dataTransfer.getData('application/json'));
+      const existingCard = document.getElementById(`group-${playerData.id}`);
+      
+      if (existingCard) {
+        existingCard.remove();
+      }
+      
+      // Determine which group the player is being dropped into
+      let newGroup;
+      if (dropZone.id === 'greenGroupPlayers') {
+        newGroup = 'green';
+      } else if (dropZone.id === 'blueGroupPlayers') {
+        newGroup = 'blue';
+      } else if (dropZone.id === 'yellowGroupPlayers') {
+        newGroup = 'yellow';
+      } else if (dropZone.id === 'pinkGroupPlayers') {
+        newGroup = 'pink';
+      }
+      
+      // Update player's group
+      playerData.group = newGroup;
+      
+      // Create new player card in the group
+      const playerCard = this.createPlayerInGroup(playerData);
+      dropZone.appendChild(playerCard);
+      
+    } catch (error) {
+      console.error('Error handling group drop:', error);
+    }
+  }
+  
+  async saveGroups() {
+    try {
+      // Show loading
+      Swal.fire({
+        title: 'Saving groups...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Collect all players from groups
+      const groupedPlayers = [];
+      
+      // Green group
+      document.querySelectorAll('#greenGroupPlayers .player-in-group').forEach(card => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'green';
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Blue group
+      document.querySelectorAll('#blueGroupPlayers .player-in-group').forEach(card => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'blue';
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Yellow group
+      document.querySelectorAll('#yellowGroupPlayers .player-in-group').forEach(card => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'yellow';
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Pink group
+      document.querySelectorAll('#pinkGroupPlayers .player-in-group').forEach(card => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'pink';
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Update tournament players with group info
+      this.tournamentPlayers = this.tournamentPlayers.map(player => {
+        const groupedPlayer = groupedPlayers.find(p => p.id === player.id);
+        if (groupedPlayer) {
+          player.group = groupedPlayer.group;
+        }
+        return player;
+      });
+      
+      // Save to Firebase
+      await firebaseService.updateTournamentPlayers(
+        this.selectedTournamentId,
+        this.tournamentPlayers
+      );
+      
+      Swal.close();
+      Swal.fire('Saved!', 'Group assignments have been saved.', 'success');
+      
+    } catch (error) {
+      Swal.close();
+      console.error('Error saving groups:', error);
+      Swal.fire('Error', 'Failed to save group assignments. Please try again.', 'error');
+    }
+  }
+  
+  resetGroups() {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'This will reset all group assignments!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reset it!',
+      cancelButtonText: 'No, keep it',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.initializeGroupAssignments();
+        Swal.fire('Reset!', 'Group assignments have been reset.', 'success');
+      }
+    });
   }
   
   // Cleanup listeners when page unloads

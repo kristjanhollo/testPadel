@@ -460,17 +460,20 @@ class TournamentBracketAmericano {
       pink: groupedPlayers.pink.length
     });
     
-    // Create Round 1 matches (SNP pattern: 1&2 vs 3&4)
-    this.createRoundWithPattern(bracketData, 1, groupedPlayers, [0, 1], [2, 3]);
+    // Create Round 1 matches (Americano pattern according to table: 1&4 vs 2&3)
+    console.log("Creating Round 1 with Americano pattern: 1&4 vs 2&3");
+    this.createRoundWithPattern(bracketData, 1, groupedPlayers, [0, 3], [1, 2]);
     
-    // Create Round 2 matches (SNP pattern: 1&3 vs 2&4)
-    this.createRoundWithPattern(bracketData, 2, groupedPlayers, [0, 2], [1, 3]);
+    // Create Round 2 matches (Americano pattern according to table: 1&2 vs 3&4)
+    console.log("Creating Round 2 with Americano pattern: 1&2 vs 3&4");
+    this.createRoundWithPattern(bracketData, 2, groupedPlayers, [0, 1], [2, 3]);
     
-    // Create Round 3 (mix round) - follows SNP specific rules
+    // Create Round 3 (mix round) - follows specific rules from the table
     this.createMixRound(bracketData, groupedPlayers);
     
-    // Create Round 4 matches (SNP pattern: 1&4 vs 2&3)
-    this.createRoundWithPattern(bracketData, 4, groupedPlayers, [0, 3], [1, 2]);
+    // Create Round 4 matches (Americano pattern according to table: 1&3 vs 2&4)
+    console.log("Creating Round 4 with Americano pattern: 1&3 vs 2&4");
+    this.createRoundWithPattern(bracketData, 4, groupedPlayers, [0, 2], [1, 3]);
   }
   
   renderAllRounds() {
@@ -626,6 +629,9 @@ class TournamentBracketAmericano {
     const roundData = bracketData.rounds.find(r => r.number === roundNumber);
     if (!roundData) return;
     
+    console.log(`===== CREATING ROUND ${roundNumber} WITH PATTERN =====`);
+    console.log(`Team 1 indices: [${team1Indices.join(', ')}], Team 2 indices: [${team2Indices.join(', ')}]`);
+    
     // Generate matches for each group
     this.createGroupMatches(roundData, 'green', 'Padel Arenas', groupedPlayers.green, team1Indices, team2Indices);
     this.createGroupMatches(roundData, 'blue', 'Coolbet', groupedPlayers.blue, team1Indices, team2Indices);
@@ -634,10 +640,20 @@ class TournamentBracketAmericano {
   }
 
   createGroupMatches(roundData, groupColor, courtName, groupPlayers, team1Indices, team2Indices) {
-    if (groupPlayers.length < 4) return;
+    if (groupPlayers.length < 4) {
+      console.log(`Not enough players in ${courtName} (${groupColor}) group: ${groupPlayers.length}`);
+      return;
+    }
+    
+    console.log(`\n----- Creating matches for ${courtName} (${groupColor}) -----`);
     
     // Sort by rating within group
     const sortedPlayers = this.sortPlayersByRating(groupPlayers);
+    
+    console.log("Players in group (sorted by rating):");
+    sortedPlayers.forEach((player, idx) => {
+      console.log(`  ${idx+1}. ${player.name} (${player.ranking || player.rating || 0})`);
+    });
     
     // Create teams based on provided indices pattern
     for (let i = 0; i < Math.floor(sortedPlayers.length / 4); i++) {
@@ -646,6 +662,10 @@ class TournamentBracketAmericano {
       // Create teams using the provided indices pattern
       const team1 = team1Indices.map(idx => sortedPlayers[baseIndex + idx]).filter(Boolean);
       const team2 = team2Indices.map(idx => sortedPlayers[baseIndex + idx]).filter(Boolean);
+      
+      console.log(`\nCreating match ${i+1}:`);
+      console.log(`  Team 1: ${team1.map(p => p.name).join(' & ')} (indices: ${team1Indices.join(', ')})`);
+      console.log(`  Team 2: ${team2.map(p => p.name).join(' & ')} (indices: ${team2Indices.join(', ')})`);
       
       // Only create match if we have enough players for both teams
       if (team1.length === 2 && team2.length === 2) {
@@ -662,6 +682,9 @@ class TournamentBracketAmericano {
         };
         
         roundData.matches.push(match);
+        console.log(`  Match created successfully for round ${roundData.number}`);
+      } else {
+        console.warn(`  Not enough players to create complete teams: Team 1 (${team1.length}/2), Team 2 (${team2.length}/2)`);
       }
     }
   }
