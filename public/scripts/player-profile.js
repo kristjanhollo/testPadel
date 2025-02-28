@@ -1,178 +1,208 @@
-// Player Profile JavaScript
+// Import dependencies and styles
+import firebaseService from './services/firebase-service';
 
-// Global chart instance to be able to destroy it later
-let ratingChartInstance = null;
-
-document.addEventListener('DOMContentLoaded', async () => {
-  console.log('Player profile page loaded');
-  
-  // Get player ID from URL parameter
-  const urlParams = new URLSearchParams(window.location.search);
-  const playerId = urlParams.get('id');
-  
-  console.log('Player ID from URL:', playerId);
-  
-  if (!playerId) {
-    console.error('No player ID provided');
-    alert('No player ID provided');
-    window.location.href = 'player-management.html';
-    return;
+/**
+ * Player Profile class
+ * Manages the display and interaction for individual player profiles
+ */
+class PlayerProfile {
+  constructor() {
+    // DOM Elements
+    this.playerNameEl = document.getElementById('playerName');
+    this.playerRatingEl = document.getElementById('playerRating');
+    this.memberSinceEl = document.getElementById('memberSince');
+    this.playerGroupEl = document.getElementById('playerGroup');
+    this.matchesPlayedEl = document.getElementById('matchesPlayed');
+    this.totalWinsEl = document.getElementById('totalWins');
+    this.totalLossesEl = document.getElementById('totalLosses');
+    this.winRateEl = document.getElementById('winRate');
+    this.tournamentsPlayedEl = document.getElementById('tournamentsPlayed');
+    this.playerRankingEl = document.getElementById('playerRanking');
+    this.matchesListEl = document.getElementById('matchesList');
+    this.tournamentsListEl = document.getElementById('tournamentsList');
+    this.groupHistoryEl = document.getElementById('groupHistory');
+    this.ratingChartContainer = document.getElementById('ratingChartContainer');
+    
+    // State variables
+    this.playerId = null;
+    this.playerData = null;
+    this.matchHistory = [];
+    this.tournamentHistory = [];
+    this.groupHistory = [];
+    this.ratingHistory = [];
+    this.ratingChartInstance = null;
+    
+    // Initialize
+    this.init();
   }
   
-  // State variables
-  let playerData = null;
-  let matchHistory = [];
-  let tournamentHistory = [];
-  let groupHistory = [];
-  let ratingHistory = [];
-  
-  try {
-    // Verify Firebase service is available
-    if (typeof window.firebaseService === 'undefined') {
-      console.error('Firebase service is not available');
-      throw new Error('Firebase service not found. Please check your setup.');
+  async init() {
+    console.log('Player profile page loaded');
+    
+    try {
+      // Get player ID from URL parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      this.playerId = urlParams.get('id');
+      
+      console.log('Player ID from URL:', this.playerId);
+      
+      if (!this.playerId) {
+        console.error('No player ID provided');
+        alert('No player ID provided');
+        window.location.href = 'player-management.html';
+        return;
+      }
+      
+      // Verify Firebase service is available
+      if (typeof firebaseService === 'undefined') {
+        console.error('Firebase service is not available');
+        throw new Error('Firebase service not found. Please check your setup.');
+      }
+      
+      // Load player data from Firebase
+      console.log('Fetching player data from Firebase...');
+      this.playerData = await firebaseService.getPlayer(this.playerId);
+      console.log('Player data received:', this.playerData);
+      
+      if (!this.playerData) {
+        console.error('Player not found');
+        alert('Player not found');
+        window.location.href = 'player-management.html';
+        return;
+      }
+      
+      // Initialize UI with player data
+      this.initializePlayerUI();
+      
+      // Load data for the player
+      await this.loadPlayerData();
+      
+      // Render all sections
+      this.renderRatingChart();
+      this.renderMatchHistory();
+      this.renderTournamentHistory();
+      this.renderGroupHistory();
+      this.updateStats();
+      
+    } catch (error) {
+      console.error('Error loading player profile:', error);
+      alert('Error loading player profile: ' + error.message);
     }
-    
-    // Load player data from Firebase
-    console.log('Fetching player data from Firebase...');
-    playerData = await window.firebaseService.getPlayer(playerId);
-    console.log('Player data received:', playerData);
-    
-    if (!playerData) {
-      console.error('Player not found');
-      alert('Player not found');
-      window.location.href = 'player-management.html';
-      return;
-    }
-    
-    // Initialize UI with player data
-    initializePlayerUI();
-    
-    // Load sample data for now
-    // In the future, this would load real data from Firebase
-    await loadSampleData();
-    
-    // Render all sections
-    renderRatingChart();
-    renderMatchHistory();
-    renderTournamentHistory();
-    renderGroupHistory();
-    updateStats();
-    
-  } catch (error) {
-    console.error('Error loading player profile:', error);
-    alert('Error loading player profile: ' + error.message);
   }
   
-  function initializePlayerUI() {
+  initializePlayerUI() {
     console.log('Initializing UI with player data');
     
     // Basic player info
-    document.getElementById('playerName').textContent = playerData.name || 'Unknown Player';
-    document.getElementById('playerRating').textContent = (playerData.ranking || 0).toFixed(1);
+    if (this.playerNameEl) this.playerNameEl.textContent = this.playerData.name || 'Unknown Player';
+    if (this.playerRatingEl) this.playerRatingEl.textContent = (this.playerData.ranking || 0).toFixed(1);
     
     // Member since date
-    const memberSinceEl = document.getElementById('memberSince');
-    if (playerData.created_at) {
+    if (this.memberSinceEl && this.playerData.created_at) {
       // Format the date based on whether it's a Firestore timestamp or a string
-      if (playerData.created_at.toDate) {
+      if (this.playerData.created_at.toDate) {
         // Firestore timestamp
-        const date = playerData.created_at.toDate();
-        memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
+        const date = this.playerData.created_at.toDate();
+        this.memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
       } else {
         // Regular date string
-        const date = new Date(playerData.created_at);
-        memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
+        const date = new Date(this.playerData.created_at);
+        this.memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
       }
-    } else {
-      memberSinceEl.textContent = 'Member since: -';
+    } else if (this.memberSinceEl) {
+      this.memberSinceEl.textContent = 'Member since: -';
     }
     
     // Player group (defaulting to 'Hot' if not specified)
-    const playerGroup = document.getElementById('playerGroup');
-    const groupName = playerData.group || 'Hot';
-    playerGroup.innerHTML = `<span class="group-badge group-${groupName.toLowerCase()}">${groupName} Group</span>`;
+    if (this.playerGroupEl) {
+      const groupName = this.playerData.group || 'Hot';
+      this.playerGroupEl.innerHTML = `<span class="group-badge group-${groupName.toLowerCase()}">${groupName} Group</span>`;
+    }
   }
   
-  async function loadSampleData() {
-    console.log('Loading sample data for player profile');
+  async loadPlayerData() {
+    console.log('Loading player data');
     
-    // In a future version, this would load real data from Firebase
-    // For now, generate sample data
-    
-    // Sample match history (last 15 matches)
-    matchHistory = generateSampleMatches(15);
-    
-    // Sample tournament history
-    tournamentHistory = generateSampleTournaments(5);
-    
-    // Sample group history
-    groupHistory = [
-      { group: 'Warm', date: '2025-01-10' },
-      { group: 'Hot', date: '2025-02-15' }
-    ];
-    
-    // Sample rating history for the chart
-    ratingHistory = generateSampleRatingHistory(6);
-    
-    return Promise.resolve();
+    try {
+      // In a future version, this would load real data from Firebase
+      // For now, we'll use the sample data generation functions
+      
+      // For a real implementation, uncomment these lines:
+      // this.matchHistory = await firebaseService.getPlayerMatches(this.playerId);
+      // this.tournamentHistory = await firebaseService.getPlayerTournaments(this.playerId);
+      // this.groupHistory = await firebaseService.getPlayerGroupHistory(this.playerId);
+      // this.ratingHistory = await firebaseService.getPlayerRatingHistory(this.playerId);
+      
+      // Generate sample data
+      this.matchHistory = this.generateSampleMatches(15);
+      this.tournamentHistory = this.generateSampleTournaments(5);
+      this.groupHistory = [
+        { group: 'Warm', date: '2025-01-10' },
+        { group: 'Hot', date: '2025-02-15' }
+      ];
+      this.ratingHistory = this.generateSampleRatingHistory(6);
+      
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Error loading player data:', error);
+      return Promise.reject(error);
+    }
   }
   
-  function updateStats() {
+  updateStats() {
     console.log('Updating player statistics');
     
     // Calculate basic stats from match history
-    const wins = matchHistory.filter(m => m.result === 'win').length;
-    const totalMatches = matchHistory.length;
+    const wins = this.matchHistory.filter(m => m.result === 'win').length;
+    const totalMatches = this.matchHistory.length;
     const winRate = totalMatches > 0 ? (wins / totalMatches * 100).toFixed(1) : 0;
     
     // Update stats in UI
-    document.getElementById('matchesPlayed').textContent = totalMatches;
-    document.getElementById('totalWins').textContent = wins;
-    document.getElementById('totalLosses').textContent = totalMatches - wins;
-    document.getElementById('winRate').textContent = `${winRate}%`;
-    document.getElementById('tournamentsPlayed').textContent = tournamentHistory.length;
+    if (this.matchesPlayedEl) this.matchesPlayedEl.textContent = totalMatches;
+    if (this.totalWinsEl) this.totalWinsEl.textContent = wins;
+    if (this.totalLossesEl) this.totalLossesEl.textContent = totalMatches - wins;
+    if (this.winRateEl) this.winRateEl.textContent = `${winRate}%`;
+    if (this.tournamentsPlayedEl) this.tournamentsPlayedEl.textContent = this.tournamentHistory.length;
     
     // Set ranking (in a real app this would be calculated)
-    document.getElementById('playerRanking').textContent = '#15';
+    if (this.playerRankingEl) this.playerRankingEl.textContent = '#15';
   }
   
-  function renderRatingChart() {
+  renderRatingChart() {
     console.log('Rendering rating history chart');
     
     // Get the container element
-    const chartContainer = document.getElementById('ratingChartContainer');
-    if (!chartContainer) {
+    if (!this.ratingChartContainer) {
       console.error('Rating chart container not found');
       return;
     }
     
     // Only proceed if we have rating history
-    if (ratingHistory.length === 0) {
+    if (this.ratingHistory.length === 0) {
       console.warn('No rating history data available');
-      chartContainer.innerHTML = '<p class="no-data">No rating history available</p>';
+      this.ratingChartContainer.innerHTML = '<p class="no-data">No rating history available</p>';
       return;
     }
     
     // Clean up any existing chart
-    if (ratingChartInstance) {
+    if (this.ratingChartInstance) {
       console.log('Destroying existing chart instance');
-      ratingChartInstance.destroy();
-      ratingChartInstance = null;
+      this.ratingChartInstance.destroy();
+      this.ratingChartInstance = null;
     }
     
     // Remove the old canvas and create a new one to avoid any Chart.js caching issues
-    chartContainer.innerHTML = '';
+    this.ratingChartContainer.innerHTML = '';
     const canvas = document.createElement('canvas');
     canvas.id = 'ratingChart';
-    chartContainer.appendChild(canvas);
+    this.ratingChartContainer.appendChild(canvas);
     
     // Format data for Chart.js
-    const dates = ratingHistory.map(item => new Date(item.date).toLocaleDateString());
-    const ratings = ratingHistory.map(item => item.rating);
+    const dates = this.ratingHistory.map(item => new Date(item.date).toLocaleDateString());
+    const ratings = this.ratingHistory.map(item => item.rating);
     
     // Create chart and store the instance
-    ratingChartInstance = new Chart(canvas, {
+    this.ratingChartInstance = new Chart(canvas, {
       type: 'line',
       data: {
         labels: dates,
@@ -231,23 +261,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
-  function renderMatchHistory() {
+  renderMatchHistory() {
     console.log('Rendering match history');
     
-    const matchesList = document.getElementById('matchesList');
-    if (!matchesList) {
+    if (!this.matchesListEl) {
       console.error('Matches list element not found');
       return;
     }
     
-    matchesList.innerHTML = '';
+    this.matchesListEl.innerHTML = '';
     
-    if (matchHistory.length === 0) {
-      matchesList.innerHTML = '<tr><td colspan="6" class="no-data">No match history available</td></tr>';
+    if (this.matchHistory.length === 0) {
+      this.matchesListEl.innerHTML = '<tr><td colspan="6" class="no-data">No match history available</td></tr>';
       return;
     }
     
-    matchHistory.forEach(match => {
+    this.matchHistory.forEach(match => {
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${new Date(match.date).toLocaleDateString()}</td>
@@ -257,27 +286,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td><span class="result-${match.result}">${match.result === 'win' ? 'Win' : 'Loss'}</span></td>
         <td>${match.points}</td>
       `;
-      matchesList.appendChild(row);
+      this.matchesListEl.appendChild(row);
     });
   }
   
-  function renderTournamentHistory() {
+  renderTournamentHistory() {
     console.log('Rendering tournament history');
     
-    const tournamentsList = document.getElementById('tournamentsList');
-    if (!tournamentsList) {
+    if (!this.tournamentsListEl) {
       console.error('Tournaments list element not found');
       return;
     }
     
-    tournamentsList.innerHTML = '';
+    this.tournamentsListEl.innerHTML = '';
     
-    if (tournamentHistory.length === 0) {
-      tournamentsList.innerHTML = '<div class="no-data">No tournament history available</div>';
+    if (this.tournamentHistory.length === 0) {
+      this.tournamentsListEl.innerHTML = '<div class="no-data">No tournament history available</div>';
       return;
     }
     
-    tournamentHistory.forEach(tournament => {
+    this.tournamentHistory.forEach(tournament => {
       const card = document.createElement('div');
       card.className = 'tournament-card';
       card.innerHTML = `
@@ -303,61 +331,61 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         </div>
       `;
-      tournamentsList.appendChild(card);
+      this.tournamentsListEl.appendChild(card);
     });
   }
   
-  function renderGroupHistory() {
+  renderGroupHistory() {
     console.log('Rendering group history');
     
-    const groupHistoryEl = document.getElementById('groupHistory');
-    if (!groupHistoryEl) {
+    if (!this.groupHistoryEl) {
       console.error('Group history element not found');
       return;
     }
     
-    groupHistoryEl.innerHTML = '';
+    this.groupHistoryEl.innerHTML = '';
     
-    if (groupHistory.length === 0) {
-      groupHistoryEl.innerHTML = '<div class="no-data">No group history available</div>';
+    if (this.groupHistory.length === 0) {
+      this.groupHistoryEl.innerHTML = '<div class="no-data">No group history available</div>';
       return;
     }
     
     // Sort by date
-    groupHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+    this.groupHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
     
     // Create timeline
-    groupHistory.forEach((item, index) => {
+    this.groupHistory.forEach((item, index) => {
       const groupEl = document.createElement('span');
       groupEl.className = `timeline-group group-${item.group.toLowerCase()}`;
       groupEl.textContent = `${item.group} (${new Date(item.date).toLocaleDateString()})`;
-      groupHistoryEl.appendChild(groupEl);
+      this.groupHistoryEl.appendChild(groupEl);
       
       // Add arrow if not the last item
-      if (index < groupHistory.length - 1) {
+      if (index < this.groupHistory.length - 1) {
         const arrowEl = document.createElement('span');
         arrowEl.className = 'timeline-arrow';
         arrowEl.textContent = '→';
-        groupHistoryEl.appendChild(arrowEl);
+        this.groupHistoryEl.appendChild(arrowEl);
       }
     });
     
     // Add current group if different from last
-    if (playerData.group && (groupHistory.length === 0 || groupHistory[groupHistory.length - 1].group !== playerData.group)) {
+    if (this.playerData.group && (this.groupHistory.length === 0 || 
+        this.groupHistory[this.groupHistory.length - 1].group !== this.playerData.group)) {
       const arrowEl = document.createElement('span');
       arrowEl.className = 'timeline-arrow';
       arrowEl.textContent = '→';
-      groupHistoryEl.appendChild(arrowEl);
+      this.groupHistoryEl.appendChild(arrowEl);
       
       const groupEl = document.createElement('span');
-      groupEl.className = `timeline-group group-${playerData.group.toLowerCase()}`;
-      groupEl.textContent = `${playerData.group} (Current)`;
-      groupHistoryEl.appendChild(groupEl);
+      groupEl.className = `timeline-group group-${this.playerData.group.toLowerCase()}`;
+      groupEl.textContent = `${this.playerData.group} (Current)`;
+      this.groupHistoryEl.appendChild(groupEl);
     }
   }
   
-  // Helper function to generate sample match data
-  function generateSampleMatches(count) {
+  // Helper functions for sample data generation
+  generateSampleMatches(count) {
     const tournaments = ['Sunday Night Padel', 'Weekend Cup', 'Community League'];
     const opponents = [
       'Carlos Mendez & Antonio Carter',
@@ -391,8 +419,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return matches.sort((a, b) => new Date(b.date) - new Date(a.date));
   }
   
-  // Helper function to generate sample tournament data
-  function generateSampleTournaments(count) {
+  generateSampleTournaments(count) {
     const tournamentNames = ['Sunday Night Padel', 'Weekend Cup', 'Community League'];
     const groups = ['Hot', 'Sweat', 'Warm', 'Star'];
     
@@ -425,13 +452,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     return tournaments.sort((a, b) => new Date(b.date) - new Date(a.date));
   }
   
-  // Helper function to generate sample rating history
-  function generateSampleRatingHistory(count) {
+  generateSampleRatingHistory(count) {
     const history = [];
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - count);
     
-    const startRating = (playerData.ranking || 20) - Math.random() * 5;
+    const startRating = (this.playerData.ranking || 20) - Math.random() * 5;
     
     for (let i = 0; i < count; i++) {
       const date = new Date(startDate);
@@ -448,4 +474,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     return history;
   }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  new PlayerProfile();
 });
+
+export default PlayerProfile;
