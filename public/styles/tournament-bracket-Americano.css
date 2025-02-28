@@ -365,4 +365,17 @@
     .round-section {
         min-width: 100%;
     }
+    
+}
+/* Eemaldab numbriliste input väljade noolekesed */
+.score-input::-webkit-inner-spin-button,
+.score-input::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+  display: none !important;
+}
+
+.score-input {
+  -moz-appearance: textfield !important; /* Firefox */
+  appearance: textfield !important;
 }
