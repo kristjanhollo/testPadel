@@ -1,451 +1,1286 @@
-// Player Profile JavaScript
+// Import dependencies and styles
+import '../styles/tournament-management.css';
+import firebaseService from './services/firebase-service';
+import IsTest from './main';
 
-// Global chart instance to be able to destroy it later
-let ratingChartInstance = null;
+// Tournament Manager class
+class TournamentManager {
+  constructor() {
+    // State variables
+    this.assignedPlayers = new Set();
+    this.tournamentPlayers = [];
+    this.registeredPlayers = [];
+    this.selectedTournamentId = localStorage.getItem('selectedTournament');
+    this.tournamentData = null;
+    this.unsubscribeFunctions = []; // Store Firebase listener unsubscribe functions
 
-document.addEventListener('DOMContentLoaded', async () => {
-  console.log('Player profile page loaded');
-  
-  // Get player ID from URL parameter
-  const urlParams = new URLSearchParams(window.location.search);
-  const playerId = urlParams.get('id');
-  
-  console.log('Player ID from URL:', playerId);
-  
-  if (!playerId) {
-    console.error('No player ID provided');
-    alert('No player ID provided');
-    window.location.href = 'player-management.html';
-    return;
+    // Constants
+    this.COURT_ORDER = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+
+    // Initialize the application
+    this.init();
   }
-  
-  // State variables
-  let playerData = null;
-  let matchHistory = [];
-  let tournamentHistory = [];
-  let groupHistory = [];
-  let ratingHistory = [];
-  
-  try {
-    // Verify Firebase service is available
-    if (typeof window.firebaseService === 'undefined') {
-      console.error('Firebase service is not available');
-      throw new Error('Firebase service not found. Please check your setup.');
-    }
-    
-    // Load player data from Firebase
-    console.log('Fetching player data from Firebase...');
-    playerData = await window.firebaseService.getPlayer(playerId);
-    console.log('Player data received:', playerData);
-    
-    if (!playerData) {
-      console.error('Player not found');
-      alert('Player not found');
-      window.location.href = 'player-management.html';
+
+  async init() {
+    if (!window.firebaseService) {
+      console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
       return;
     }
-    
-    // Initialize UI with player data
-    initializePlayerUI();
-    
-    // Load sample data for now
-    // In the future, this would load real data from Firebase
-    await loadSampleData();
-    
-    // Render all sections
-    renderRatingChart();
-    renderMatchHistory();
-    renderTournamentHistory();
-    renderGroupHistory();
-    updateStats();
-    
-  } catch (error) {
-    console.error('Error loading player profile:', error);
-    alert('Error loading player profile: ' + error.message);
-  }
-  
-  function initializePlayerUI() {
-    console.log('Initializing UI with player data');
-    
-    // Basic player info
-    document.getElementById('playerName').textContent = playerData.name || 'Unknown Player';
-    document.getElementById('playerRating').textContent = (playerData.ranking || 0).toFixed(1);
-    
-    // Member since date
-    const memberSinceEl = document.getElementById('memberSince');
-    if (playerData.created_at) {
-      // Format the date based on whether it's a Firestore timestamp or a string
-      if (playerData.created_at.toDate) {
-        // Firestore timestamp
-        const date = playerData.created_at.toDate();
-        memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
-      } else {
-        // Regular date string
-        const date = new Date(playerData.created_at);
-        memberSinceEl.textContent = `Member since: ${date.toLocaleDateString()}`;
+
+    // Show loading indicator
+    Swal.fire({
+      title: 'Loading tournament data...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
       }
+    });
+
+    try {
+      // Setup realtime listeners for tournament data
+      this.setupTournamentListener();
+      
+      // Wait for initial tournament data to be loaded
+      await this.waitForTournamentData();
+      
+      Swal.close();
+      
+      this.initializeCourts();
+      await this.loadPlayers();
+      this.initializeControls();
+      this.initializeDragAndDrop();
+      this.initializeSearchFunctionality();
+      this.updateTournamentDisplay();
+      
+      // Show/hide sections based on tournament format
+      if (this.tournamentData && this.tournamentData.format === 'Americano') {
+        // For Americano format, show group assignments and hide court assignments
+        this.showGroupAssignmentsSection();
+        this.initializeGroupAssignments();
+        this.initializeGroupDragAndDrop();
+        
+        // Hide court assignments section
+        const courtsSection = document.querySelector('.courts-section');
+        if (courtsSection) {
+          courtsSection.style.display = 'none';
+        }
+      } else {
+        // For other formats, hide group assignments
+        const groupAssignmentsSection = document.getElementById('groupAssignmentsSection');
+        if (groupAssignmentsSection) {
+          groupAssignmentsSection.style.display = 'none';
+        }
+      }
+    } catch (error) {
+      Swal.close();
+      console.error('Error initializing tournament management:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to load tournament data. Please try again later.',
+        icon: 'error',
+        confirmButtonText: 'Go Back to List',
+      }).then(() => {
+        window.location.href = 'tournament-list.html';
+      });
+    }
+  }
+
+  setupTournamentListener() {
+    // Listen for tournament data changes
+    const unsubscribeTournament = firebaseService.listenToTournament(
+      this.selectedTournamentId,
+      (tournamentData) => {
+        if (tournamentData) {
+          this.tournamentData = tournamentData;
+          this.updateTournamentDisplay();
+        } else {
+          console.error('Tournament not found');
+          Swal.fire({
+            title: 'Tournament Not Found',
+            text: 'The requested tournament could not be found.',
+            icon: 'error',
+            confirmButtonText: 'Go Back to List',
+          }).then(() => {
+            window.location.href = 'tournament-list.html';
+          });
+        }
+      }
+    );
+    
+    // Listen for tournament players changes
+    const unsubscribePlayers = firebaseService.listenToTournamentPlayers(
+      this.selectedTournamentId,
+      (players) => {
+        this.tournamentPlayers = players;
+        this.initializePlayers();
+      }
+    );
+    
+    this.unsubscribeFunctions.push(unsubscribeTournament, unsubscribePlayers);
+  }
+
+  // Wait for tournament data to be loaded
+  waitForTournamentData() {
+    return new Promise((resolve) => {
+      // Check if data is already loaded
+      if (this.tournamentData) {
+        resolve();
+        return;
+      }
+      
+      // Set up a temporary listener
+      const checkInterval = setInterval(() => {
+        if (this.tournamentData) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!this.tournamentData) {
+          console.error('Timeout waiting for tournament data');
+          resolve(); // Resolve anyway to continue flow
+        }
+      }, 10000);
+    });
+  }
+
+  formatDate(dateValue) {
+    if (!dateValue) return 'N/A';
+    
+    try {
+      // Handle Firestore timestamp
+      if (dateValue.toDate) {
+        return dateValue.toDate().toLocaleDateString();
+      }
+      
+      // Handle string date
+      return new Date(dateValue).toLocaleDateString();
+    } catch (e) {
+      return dateValue;
+    }
+  }
+
+  // Add these methods to your TournamentManager class
+
+  async loadPlayers() {
+    try {
+      // Get all registered players
+      this.registeredPlayers = await firebaseService.getAllPlayers();
+      
+      // Get tournament players
+      this.tournamentPlayers = await firebaseService.getTournamentPlayers(
+        this.selectedTournamentId
+      );
+      console.log(IsTest);
+      // For testing: quick load 16 random players if IsTest is true and no players are loaded yet
+      if (IsTest === true && this.tournamentPlayers.length === 0) {
+        console.log("Test mode: Auto-loading 16 random players");
+        
+        // Ensure we have enough players in the database
+        if (this.registeredPlayers.length >= 16) {
+          // Shuffle the array of players to get random selection
+          const shuffledPlayers = [...this.registeredPlayers].sort(() => 0.5 - Math.random());
+          // Take the first 16 players
+          this.tournamentPlayers = shuffledPlayers.slice(0, 16);
+        } else {
+          // If not enough players, take all available and log a warning
+          console.warn(`Test mode: Only ${this.registeredPlayers.length} players available`);
+          this.tournamentPlayers = [...this.registeredPlayers];
+        }
+        
+        // Sort by ranking for better court assignments
+        this.tournamentPlayers.sort((a, b) => b.ranking - a.ranking);
+        
+        // Save to Firebase
+        await firebaseService.updateTournamentPlayers(
+          this.selectedTournamentId,
+          this.tournamentPlayers
+        );
+      }
+      
+      this.initializePlayers();
+      this.autoAssignTopPlayers();
+    } catch (error) {
+      console.error('Error loading players:', error);
+      Swal.fire('Error', 'Failed to load players', 'error');
+    }
+  }
+
+  initializeSearchFunctionality() {
+    const searchInput = document.getElementById('searchInput');
+    const resultsContainer = document.getElementById('resultsContainer');
+
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.toLowerCase();
+      resultsContainer.innerHTML = '';
+
+      if (query) {
+        const filteredPlayers = this.registeredPlayers.filter(player => 
+          player.name && player.name.toLowerCase().includes(query)
+        );
+
+        filteredPlayers.forEach(player => {
+          const div = document.createElement('div');
+          div.classList.add('result-item');
+          div.innerHTML = `
+            <div class="player-result">
+              <span class="player-name">${player.name}</span>
+              <span class="player-rating">⭐ ${player.ranking || 'N/A'}</span>
+            </div>
+          `;
+          div.addEventListener('click', () => this.addToSelected(player));
+          resultsContainer.appendChild(div);
+        });
+      }
+    });
+  }
+
+  async addToSelected(player) {
+    if (!this.tournamentPlayers.some(p => p.id === player.id)) {
+      this.tournamentPlayers.push(player);
+      
+      // Update in Firebase
+      await firebaseService.updateTournamentPlayers(
+        this.selectedTournamentId,
+        this.tournamentPlayers
+      );
+      
+      document.getElementById('searchInput').value = '';
+      document.getElementById('resultsContainer').innerHTML = '';
+      
+      this.initializePlayers();
+      this.autoAssignTopPlayers();
+    }
+  }
+
+  initializePlayers() {
+    const playersList = document.getElementById('playersList');
+    if (!playersList) return;
+    
+    playersList.innerHTML = '';
+    
+    this.tournamentPlayers.forEach(player => {
+      const playerCard = this.createPlayerCard(player);
+      playersList.appendChild(playerCard);
+    });
+  }
+
+  createPlayerCard(player, inSlot = false) {
+    const playerCard = document.createElement('div');
+    playerCard.className = `player-card${inSlot ? ' in-slot' : ''}`;
+    playerCard.id = inSlot ? `slot-${player.id}` : player.id;
+    playerCard.draggable = true;
+    playerCard.dataset.player = JSON.stringify(player);
+
+    playerCard.innerHTML = `
+      <span>${player.name} : ${player.ranking}</span>
+      <span class="${inSlot ? 'remove-from-slot' : 'remove-player'}">×</span>
+    `;
+
+    const removeBtn = playerCard.querySelector(`.${inSlot ? 'remove-from-slot' : 'remove-player'}`);
+    removeBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (inSlot) {
+        this.removeFromSlot(playerCard, player);
+      } else {
+        this.removePlayer(player.id, player.name);
+      }
+    };
+
+    this.setupDragListeners(playerCard, player, inSlot);
+    return playerCard;
+  }
+
+  removeFromSlot(playerCard, player) {
+    const slot = playerCard.closest('.player-slot');
+    this.assignedPlayers.delete(player.id);
+    slot.innerHTML = '<span>Drop Player Here</span>';
+    slot.classList.remove('filled');
+    this.updatePlayerCardState(player.id, false);
+  }
+
+  setupDragListeners(playerCard, player, inSlot) {
+    playerCard.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('application/json', JSON.stringify(player));
+      playerCard.classList.add('dragging');
+      if (inSlot) {
+        setTimeout(() => this.removeFromSlot(playerCard, player), 0);
+      }
+    });
+
+    playerCard.addEventListener('dragend', () => {
+      playerCard.classList.remove('dragging');
+    });
+  }
+
+  autoAssignTopPlayers() {
+    if (window.IsTest && this.tournamentPlayers.length === 0) {
+      this.tournamentPlayers = this.registeredPlayers.slice(0, 16);
+    }
+
+    // Check if we have Americano format and players have group info
+    if (this.tournamentData && this.tournamentData.format === 'Americano') {
+      // Group players by their group
+      const groupedPlayers = {
+        green: [],
+        blue: [],
+        yellow: [],
+        pink: []
+      };
+      
+      // First, try to use existing group info
+      this.tournamentPlayers.forEach(player => {
+        if (player.group && groupedPlayers[player.group]) {
+          groupedPlayers[player.group].push(player);
+        }
+      });
+      
+      // If any group is empty, assign players by rating
+      const hasEmptyGroups = Object.values(groupedPlayers).some(group => group.length === 0);
+      
+      if (hasEmptyGroups) {
+        // Reset groups
+        groupedPlayers.green = [];
+        groupedPlayers.blue = [];
+        groupedPlayers.yellow = [];
+        groupedPlayers.pink = [];
+        
+        // Sort players by rating
+        const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+        
+        // Distribute players to groups
+        const groupSize = Math.ceil(sortedPlayers.length / 4);
+        
+        sortedPlayers.forEach((player, index) => {
+          if (index < groupSize) {
+            groupedPlayers.green.push(player);
+            player.group = 'green';
+          } else if (index < groupSize * 2) {
+            groupedPlayers.blue.push(player);
+            player.group = 'blue';
+          } else if (index < groupSize * 3) {
+            groupedPlayers.yellow.push(player);
+            player.group = 'yellow';
+          } else {
+            groupedPlayers.pink.push(player);
+            player.group = 'pink';
+          }
+        });
+      }
+      
+      // Assign players to courts based on their groups
+      const groupColors = ['green', 'blue', 'yellow', 'pink'];
+      
+      groupColors.forEach((color, courtIndex) => {
+        const players = groupedPlayers[color];
+        
+        // Sort players by rating within each group
+        players.sort((a, b) => b.ranking - a.ranking);
+        
+        // Assign players to slots according to Americano format
+        // For Round 1: 1&4 vs 2&3
+        if (players.length >= 4) {
+          // Team 1: Player 1 (highest rating)
+          this.assignPlayerToSlot(players[0], `court-${courtIndex + 1}`, 1, 1);
+          
+          // Team 1: Player 4 (lowest rating of the four)
+          this.assignPlayerToSlot(players[3], `court-${courtIndex + 1}`, 1, 2);
+          
+          // Team 2: Player 2 (second highest rating)
+          this.assignPlayerToSlot(players[1], `court-${courtIndex + 1}`, 2, 1);
+          
+          // Team 2: Player 3 (third highest rating)
+          this.assignPlayerToSlot(players[2], `court-${courtIndex + 1}`, 2, 2);
+        }
+      });
     } else {
-      memberSinceEl.textContent = 'Member since: -';
+      // For non-Americano formats, use the original logic
+      const topPlayers = [...this.tournamentPlayers]
+        .sort((a, b) => b.ranking - a.ranking)
+        .slice(0, 16);
+
+      topPlayers.forEach((player, index) => {
+        const courtIndex = Math.floor(index / 4);
+        const team = index % 4 === 0 || index % 4 === 3 ? 1 : 2;
+        const position = index % 2 === 0 ? 1 : 2;
+        
+        this.assignPlayerToSlot(player, `court-${courtIndex + 1}`, team, position);
+      });
     }
-    
-    // Player group (defaulting to 'Hot' if not specified)
-    const playerGroup = document.getElementById('playerGroup');
-    const groupName = playerData.group || 'Hot';
-    playerGroup.innerHTML = `<span class="group-badge group-${groupName.toLowerCase()}">${groupName} Group</span>`;
   }
   
-  async function loadSampleData() {
-    console.log('Loading sample data for player profile');
-    
-    // In a future version, this would load real data from Firebase
-    // For now, generate sample data
-    
-    // Sample match history (last 15 matches)
-    matchHistory = generateSampleMatches(15);
-    
-    // Sample tournament history
-    tournamentHistory = generateSampleTournaments(5);
-    
-    // Sample group history
-    groupHistory = [
-      { group: 'Warm', date: '2025-01-10' },
-      { group: 'Hot', date: '2025-02-15' }
-    ];
-    
-    // Sample rating history for the chart
-    ratingHistory = generateSampleRatingHistory(6);
-    
-    return Promise.resolve();
+  assignPlayerToSlot(player, courtId, team, position) {
+    const slot = document.querySelector(
+      `.player-slot[data-court="${courtId}"][data-team="${team}"][data-position="${position}"]`
+    );
+
+    if (slot) {
+      slot.innerHTML = '';
+      const playerCard = this.createPlayerCard(player, true);
+      slot.appendChild(playerCard);
+      slot.classList.add('filled');
+      this.assignedPlayers.add(player.id);
+      this.updatePlayerCardState(player.id, true);
+    }
   }
-  
-  function updateStats() {
-    console.log('Updating player statistics');
-    
-    // Calculate basic stats from match history
-    const wins = matchHistory.filter(m => m.result === 'win').length;
-    const totalMatches = matchHistory.length;
-    const winRate = totalMatches > 0 ? (wins / totalMatches * 100).toFixed(1) : 0;
-    
-    // Update stats in UI
-    document.getElementById('matchesPlayed').textContent = totalMatches;
-    document.getElementById('totalWins').textContent = wins;
-    document.getElementById('totalLosses').textContent = totalMatches - wins;
-    document.getElementById('winRate').textContent = `${winRate}%`;
-    document.getElementById('tournamentsPlayed').textContent = tournamentHistory.length;
-    
-    // Set ranking (in a real app this would be calculated)
-    document.getElementById('playerRanking').textContent = '#15';
+
+  initializeCourts() {
+    const courtsGrid = document.getElementById('courtsGrid');
+    courtsGrid.innerHTML = '';
+
+    this.COURT_ORDER.forEach((courtName, index) => {
+      const courtId = `court-${index + 1}`;
+      courtsGrid.appendChild(this.createCourtCard(courtId, courtName));
+    });
   }
-  
-  function renderRatingChart() {
-    console.log('Rendering rating history chart');
+
+  createCourtCard(courtId, courtName) {
+    const courtCard = document.createElement('div');
+    courtCard.className = 'court-card';
+    courtCard.id = courtId;
+    courtCard.innerHTML = `
+      <div class="court-header">
+        <span class="court-name">${courtName}</span>
+      </div>
+      <div class="teams-container">
+        ${this.createTeamSection(1, courtId)}
+        <div class="vs-label">VS</div>
+        ${this.createTeamSection(2, courtId)}
+      </div>
+    `;
+    return courtCard;
+  }
+
+  createTeamSection(teamNumber, courtId) {
+    return `
+      <div class="team-section" data-team="${teamNumber}">
+        <div class="player-slot" data-court="${courtId}" data-team="${teamNumber}" data-position="1">
+          <span>Drop Player Here</span>
+        </div>
+        <div class="player-slot" data-court="${courtId}" data-team="${teamNumber}" data-position="2">
+          <span>Drop Player Here</span>
+        </div>
+      </div>
+    `;
+  }
+
+  initializeControls() {
+    const setFirstRoundBtn = document.getElementById('setFirstRound');
+    const resetBtn = document.getElementById('resetAssignments');
+
+    setFirstRoundBtn.addEventListener('click', () => this.createFirstRound());
+    resetBtn.addEventListener('click', () => this.resetAssignments());
+  }
+
+  async createFirstRound() {
+    if (!this.selectedTournamentId) {
+      console.error('No selected tournament ID');
+      return;
+    }
+
+    try {
+      // Show loading
+      Swal.fire({
+        title: 'Creating first round...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Get court assignments from UI
+      const courtAssignments = this.getCourtAssignmentsFromUI();
+      
+      // Validate courts are filled
+      if (!this.validateCourtAssignments(courtAssignments)) {
+        Swal.close();
+        Swal.fire({
+          title: 'Incomplete Courts',
+          text: 'Please assign players to all courts before creating the first round.',
+          icon: 'warning'
+        });
+        return;
+      }
+      
+      // Create bracket data
+      const bracketData = {
+        tournamentId: this.selectedTournamentId,
+        format: this.tournamentData.format,
+        currentRound: 1,
+        courts: this.COURT_ORDER.map((courtName, index) => {
+          const courtId = `court-${index + 1}`;
+          const courtPlayers = this.getPlayersForCourt(courtId);
+          
+          return {
+            name: courtName,
+            matches: [{
+              id: `match-${Date.now()}-${index}`,
+              team1: [courtPlayers[0], courtPlayers[1]],
+              team2: [courtPlayers[2], courtPlayers[3]],
+              score1: null,
+              score2: null,
+              completed: false,
+              round: 1,
+              courtName
+            }]
+          };
+        }),
+        completedMatches: [],
+        standings: this.tournamentPlayers.slice(0, 16).map(player => ({
+          id: player.id,
+          name: player.name,
+          points: 0,
+          wins: 0,
+          losses: 0,
+          gamesPlayed: 0,
+          rating: player.ranking,
+        })),
+      };
+
+      // For Americano format, we need to adjust the data structure
+      if (this.tournamentData.format === 'Americano') {
+        console.log('Creating Americano format bracket');
+        
+        // Create specific Americano structure
+        const americanoBracketData = {
+          format: 'Americano',
+          currentRound: 1,
+          rounds: [
+            { number: 1, completed: false, matches: [] },
+            { number: 2, completed: false, matches: [] },
+            { number: 3, completed: false, matches: [] },
+            { number: 4, completed: false, matches: [] }
+          ],
+          completedMatches: [],
+          standings: this.tournamentPlayers.slice(0, 16).map(player => {
+            // Use player's group if it exists, otherwise determine based on rank
+            if (player.group) {
+              return {
+                id: player.id,
+                name: player.name,
+                group: player.group,
+                points: 0,
+                gamesPlayed: 0,
+                wins: 0,
+                losses: 0
+              };
+            } else {
+              // Determine group based on rank
+              const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+              const playerIndex = sortedPlayers.findIndex(p => p.id === player.id);
+              const groupSize = Math.ceil(sortedPlayers.length / 4);
+              
+              let group = 'green';
+              if (playerIndex < groupSize) {
+                group = 'green'; // Top group
+              } else if (playerIndex < groupSize * 2) {
+                group = 'blue'; // Second group
+              } else if (playerIndex < groupSize * 3) {
+                group = 'yellow'; // Third group
+              } else {
+                group = 'pink'; // Bottom group
+              }
+              
+              return {
+                id: player.id,
+                name: player.name,
+                group: group,
+                points: 0,
+                gamesPlayed: 0,
+                wins: 0,
+                losses: 0
+              };
+            }
+          })
+        };
+        
+        // Add matches to the first round
+        const firstRound = americanoBracketData.rounds[0];
+        
+        console.log("===== AMERICANO FORMAADI PAARIDE MOODUSTAMINE =====");
+        
+        // Group players by their assigned courts (which reflects their group)
+        this.COURT_ORDER.forEach((courtName, index) => {
+          const courtId = `court-${index + 1}`;
+          const courtPlayers = this.getPlayersForCourt(courtId);
+          const groupColor = ['green', 'blue', 'yellow', 'pink'][index];
+          
+          console.log(`\n----- TÖÖTLEN VÄLJAKUT: ${courtName} (${groupColor}) -----`);
+          
+          if (courtPlayers.length === 4) {
+            // Log players before sorting
+            console.log("MÄNGIJAD ENNE SORTEERIMIST:", 
+              courtPlayers.map(p => `${p.name} (${p.ranking || 0})`).join(", "));
+            
+            // Sort players by rating before creating pairs
+            const sortedPlayers = [...courtPlayers].sort((a, b) => b.ranking - a.ranking);
+            
+            // Log players after sorting
+            console.log("MÄNGIJAD PÄRAST SORTEERIMIST:", 
+              sortedPlayers.map((p, i) => `${i+1}. ${p.name} (${p.ranking || 0})`).join(", "));
+            
+            // Americano format for Round 1: 1&4 vs 2&3 (according to the table)
+            console.log("PAARIDE MOODUSTAMINE AMERICANO REEGLITE JÄRGI (1&4 vs 2&3):");
+            console.log(`TEAM1: ${sortedPlayers[0].name} & ${sortedPlayers[3].name} (nr 1 & nr 4)`);
+            console.log(`TEAM2: ${sortedPlayers[1].name} & ${sortedPlayers[2].name} (nr 2 & nr 3)`);
+            
+            const match = {
+              id: `match-${Date.now()}-1-${groupColor}-${index}`,
+              court: courtName,
+              team1: [sortedPlayers[0], sortedPlayers[3]], // 1&4 (highest and lowest)
+              team2: [sortedPlayers[1], sortedPlayers[2]], // 2&3 (second and third highest)
+              score1: null,
+              score2: null,
+              completed: false,
+              round: 1,
+              groupColor: groupColor
+            };
+            
+            firstRound.matches.push(match);
+            
+            console.log(`LOODUD MÄNG VÄLJAKUL ${courtName}:`);
+            console.log(`  TEAM1: ${match.team1.map(p => p.name).join(" & ")}`);
+            console.log(`  TEAM2: ${match.team2.map(p => p.name).join(" & ")}`);
+          } else {
+            console.warn(`VIGA: Väljakul ${courtName} pole piisavalt mängijaid (${courtPlayers.length})`);
+          }
+        });
+        
+        console.log("===== AMERICANO FORMAADI PAARIDE MOODUSTAMINE LÕPETATUD =====");
+        
+        // Save using Americano specific method
+        await firebaseService.saveTournamentBracketAmericano(
+          this.selectedTournamentId,
+          americanoBracketData
+        );
+      } else {
+        // For Mexicano format, use standard bracket structure
+        console.log('Creating Mexicano format bracket');
+        await firebaseService.saveTournamentBracket(
+          this.selectedTournamentId,
+          bracketData
+        );
+      }
+
+      // Update tournament status to ongoing
+      await firebaseService.updateTournament(
+        this.selectedTournamentId,
+        { status_id: 2 } // 2 = ongoing
+      );
+      
+      Swal.close();
+      
+      // Navigate to appropriate bracket view
+      window.location.href = this.tournamentData.format === 'Americano' 
+        ? 'tournament-bracket-Americano.html' 
+        : 'tournament-bracket-M.html';
+        
+    } catch (error) {
+      Swal.close();
+      console.error('Error creating first round:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to create the first round. Please try again.',
+        icon: 'error'
+      });
+    }
+  }
+
+  async updateTournamentDisplay() {
+    if (!this.tournamentData) return;
     
-    // Get the container element
-    const chartContainer = document.getElementById('ratingChartContainer');
-    if (!chartContainer) {
-      console.error('Rating chart container not found');
+    // Check if tournament is completed
+    if (this.tournamentData.status_id === 3) { // 3 = completed
+      // Redirect to tournament stats page
+      Swal.fire({
+        title: 'Tournament Completed',
+        text: 'This tournament is already completed. Redirecting to results page.',
+        icon: 'info',
+        timer: 2000,
+        showConfirmButton: false
+      }).then(() => {
+        window.location.href = 'tournament-stats.html';
+      });
       return;
     }
     
-    // Only proceed if we have rating history
-    if (ratingHistory.length === 0) {
-      console.warn('No rating history data available');
-      chartContainer.innerHTML = '<p class="no-data">No rating history available</p>';
-      return;
-    }
+    // If not completed, show tournament info as normal
+    document.getElementById('tournamentName').textContent = this.tournamentData.name;
+    document.getElementById('tournamentDate').textContent = `Date: ${this.formatDate(this.tournamentData.start_date)}`;
+    document.getElementById('tournamentLocation').textContent = `Location: ${this.tournamentData.location}`;
+    document.getElementById('tournamentFormat').textContent = `Format: ${this.tournamentData.format}`;
+  }
+
+  getCourtAssignmentsFromUI() {
+    const assignments = {};
     
-    // Clean up any existing chart
-    if (ratingChartInstance) {
-      console.log('Destroying existing chart instance');
-      ratingChartInstance.destroy();
-      ratingChartInstance = null;
-    }
+    this.COURT_ORDER.forEach((courtName, index) => {
+      const courtId = `court-${index + 1}`;
+      assignments[courtId] = this.getPlayersForCourt(courtId);
+    });
     
-    // Remove the old canvas and create a new one to avoid any Chart.js caching issues
-    chartContainer.innerHTML = '';
-    const canvas = document.createElement('canvas');
-    canvas.id = 'ratingChart';
-    chartContainer.appendChild(canvas);
+    return assignments;
+  }
+  
+  getPlayersForCourt(courtId) {
+    const slots = document.querySelectorAll(`.player-slot[data-court="${courtId}"]`);
+    const players = [];
     
-    // Format data for Chart.js
-    const dates = ratingHistory.map(item => new Date(item.date).toLocaleDateString());
-    const ratings = ratingHistory.map(item => item.rating);
-    
-    // Create chart and store the instance
-    ratingChartInstance = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: dates,
-        datasets: [{
-          label: 'Player Rating',
-          data: ratings,
-          borderColor: '#2563eb',
-          backgroundColor: 'rgba(37, 99, 235, 0.1)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBackgroundColor: '#2563eb'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: {
-            min: Math.max(0, Math.min(...ratings) - 5),
-            max: Math.max(...ratings) + 5,
-            title: {
-              display: true,
-              text: 'Rating'
-            }
-          },
-          x: {
-            title: {
-              display: true,
-              text: 'Date'
-            }
-          }
-        },
-        plugins: {
-          legend: {
-            display: false
-          },
-          tooltip: {
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            titleColor: '#1e293b',
-            bodyColor: '#1e293b',
-            titleFont: {
-              weight: 'bold'
-            },
-            bodyFont: {
-              size: 14
-            },
-            borderColor: '#e2e8f0',
-            borderWidth: 1,
-            padding: 10,
-            displayColors: false
-          }
+    slots.forEach(slot => {
+      const playerCard = slot.querySelector('.player-card');
+      if (playerCard) {
+        try {
+          const player = JSON.parse(playerCard.dataset.player);
+          players.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
         }
       }
     });
+    
+    return players;
   }
   
-  function renderMatchHistory() {
-    console.log('Rendering match history');
-    
-    const matchesList = document.getElementById('matchesList');
-    if (!matchesList) {
-      console.error('Matches list element not found');
-      return;
+  validateCourtAssignments(assignments) {
+    for (const courtId in assignments) {
+      if (assignments[courtId].length !== 4) {
+        return false;
+      }
     }
-    
-    matchesList.innerHTML = '';
-    
-    if (matchHistory.length === 0) {
-      matchesList.innerHTML = '<tr><td colspan="6" class="no-data">No match history available</td></tr>';
-      return;
-    }
-    
-    matchHistory.forEach(match => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${new Date(match.date).toLocaleDateString()}</td>
-        <td>${match.tournament}</td>
-        <td>${match.opponent}</td>
-        <td>${match.score}</td>
-        <td><span class="result-${match.result}">${match.result === 'win' ? 'Win' : 'Loss'}</span></td>
-        <td>${match.points}</td>
-      `;
-      matchesList.appendChild(row);
+    return true;
+  }
+
+  resetAssignments() {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'This will reset all court assignments!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reset it!',
+      cancelButtonText: 'No, keep it',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.performReset();
+      }
     });
   }
-  
-  function renderTournamentHistory() {
-    console.log('Rendering tournament history');
+
+  performReset() {
+    this.assignedPlayers.clear();
+    const slots = document.querySelectorAll('.player-slot');
+    slots.forEach(slot => {
+      if (slot.classList.contains('filled')) {
+        const playerCard = slot.querySelector('.player-card');
+        if (playerCard) {
+          const playerId = playerCard.id.replace('slot-', '');
+          this.updatePlayerCardState(playerId, false);
+        }
+        slot.innerHTML = '<span>Drop Player Here</span>';
+        slot.classList.remove('filled');
+      }
+    });
+    Swal.fire('Reset!', 'All assignments have been reset.', 'success');
+  }
+
+  async removePlayer(playerId, playerName) {
+    const result = await Swal.fire({
+      title: 'Remove Player?',
+      text: `Are you sure you want to remove ${playerName}?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, remove',
+      cancelButtonText: 'Cancel',
+    });
     
-    const tournamentsList = document.getElementById('tournamentsList');
-    if (!tournamentsList) {
-      console.error('Tournaments list element not found');
-      return;
+    if (result.isConfirmed) {
+      try {
+        // Remove from tournament players
+        this.tournamentPlayers = this.tournamentPlayers.filter(p => p.id !== playerId);
+        
+        // Update in Firebase
+        await firebaseService.updateTournamentPlayers(
+          this.selectedTournamentId,
+          this.tournamentPlayers
+        );
+        
+        // Remove from UI
+        document.getElementById(playerId)?.remove();
+        
+        // Remove from any court slot
+        const slotCard = document.getElementById(`slot-${playerId}`);
+        if (slotCard) {
+          const slot = slotCard.closest('.player-slot');
+          this.assignedPlayers.delete(playerId);
+          slot.innerHTML = '<span>Drop Player Here</span>';
+          slot.classList.remove('filled');
+        }
+        
+        Swal.fire('Removed!', `${playerName} has been removed.`, 'success');
+      } catch (error) {
+        console.error('Error removing player:', error);
+        Swal.fire('Error', `Could not remove ${playerName}. Please try again.`, 'error');
+      }
     }
-    
-    tournamentsList.innerHTML = '';
-    
-    if (tournamentHistory.length === 0) {
-      tournamentsList.innerHTML = '<div class="no-data">No tournament history available</div>';
-      return;
-    }
-    
-    tournamentHistory.forEach(tournament => {
-      const card = document.createElement('div');
-      card.className = 'tournament-card';
-      card.innerHTML = `
-        <div class="tournament-header">
-          <div>
-            <div class="tournament-name">${tournament.name}</div>
-            <div class="tournament-group">${tournament.group} Session</div>
-          </div>
-          <div class="tournament-date">${new Date(tournament.date).toLocaleDateString()}</div>
-        </div>
-        <div class="tournament-stats">
-          <div class="tournament-stat">
-            <div class="tournament-stat-label">Final Position</div>
-            <div class="tournament-stat-value">#${tournament.position} of ${tournament.totalPlayers}</div>
-          </div>
-          <div class="tournament-stat">
-            <div class="tournament-stat-label">Points</div>
-            <div class="tournament-stat-value">${tournament.points}</div>
-          </div>
-          <div class="tournament-stat">
-            <div class="tournament-stat-label">Games W/L</div>
-            <div class="tournament-stat-value">${tournament.gamesWon}/${tournament.gamesLost}</div>
-          </div>
-        </div>
-      `;
-      tournamentsList.appendChild(card);
+  }
+
+  initializeDragAndDrop() {
+    const playersList = document.getElementById('playersList');
+    this.setupDropZone(playersList);
+
+    document.querySelectorAll('.player-slot').forEach(slot => {
+      this.setupDropZone(slot);
     });
   }
+
+  setupDropZone(element) {
+    element.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      element.classList.add('drag-over');
+    });
+
+    element.addEventListener('dragleave', () => {
+      element.classList.remove('drag-over');
+    });
+
+    element.addEventListener('drop', (e) => this.handleDrop(e, element));
+  }
+
+  handleDrop(e, dropZone) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+
+    try {
+      const playerData = JSON.parse(e.dataTransfer.getData('application/json'));
+
+      if (dropZone.id === 'playersList') {
+        this.assignedPlayers.delete(playerData.id);
+        this.updatePlayerCardState(playerData.id, false);
+        return;
+      }
+
+      if (dropZone.classList.contains('player-slot')) {
+        this.handleSlotDrop(dropZone, playerData);
+      }
+    } catch (error) {
+      console.error('Error handling drop:', error);
+    }
+  }
+
+  handleSlotDrop(slot, playerData) {
+    if (this.assignedPlayers.has(playerData.id)) {
+      Swal.fire('Already Assigned', 'This player is already assigned to a team', 'warning');
+      return;
+    }
+
+    if (slot.querySelector('.player-card')) {
+      const existingPlayerId = slot.querySelector('.player-card').id.replace('slot-', '');
+      this.assignedPlayers.delete(existingPlayerId);
+      this.updatePlayerCardState(existingPlayerId, false);
+    }
+
+    slot.innerHTML = '';
+    const playerCard = this.createPlayerCard(playerData, true);
+    slot.appendChild(playerCard);
+    slot.classList.add('filled');
+    this.assignedPlayers.add(playerData.id);
+    this.updatePlayerCardState(playerData.id, true);
+  }
+
+  updatePlayerCardState(playerId, isAssigned) {
+    const playerCard = document.getElementById(playerId);
+    if (playerCard) {
+      playerCard.classList.toggle('assigned', isAssigned);
+    }
+  }
   
-  function renderGroupHistory() {
-    console.log('Rendering group history');
-    
-    const groupHistoryEl = document.getElementById('groupHistory');
-    if (!groupHistoryEl) {
-      console.error('Group history element not found');
-      return;
-    }
-    
-    groupHistoryEl.innerHTML = '';
-    
-    if (groupHistory.length === 0) {
-      groupHistoryEl.innerHTML = '<div class="no-data">No group history available</div>';
-      return;
-    }
-    
-    // Sort by date
-    groupHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    // Create timeline
-    groupHistory.forEach((item, index) => {
-      const groupEl = document.createElement('span');
-      groupEl.className = `timeline-group group-${item.group.toLowerCase()}`;
-      groupEl.textContent = `${item.group} (${new Date(item.date).toLocaleDateString()})`;
-      groupHistoryEl.appendChild(groupEl);
+  // Group Assignments Section Functions
+  showGroupAssignmentsSection() {
+    const groupAssignmentsSection = document.getElementById('groupAssignmentsSection');
+    if (groupAssignmentsSection) {
+      groupAssignmentsSection.style.display = 'block';
       
-      // Add arrow if not the last item
-      if (index < groupHistory.length - 1) {
-        const arrowEl = document.createElement('span');
-        arrowEl.className = 'timeline-arrow';
-        arrowEl.textContent = '→';
-        groupHistoryEl.appendChild(arrowEl);
+      // Initialize controls
+      const saveGroupsBtn = document.getElementById('saveGroups');
+      const resetGroupsBtn = document.getElementById('resetGroups');
+      
+      if (saveGroupsBtn) {
+        saveGroupsBtn.addEventListener('click', () => this.saveGroups());
+      }
+      
+      if (resetGroupsBtn) {
+        resetGroupsBtn.addEventListener('click', () => this.resetGroups());
+      }
+    }
+  }
+  
+  initializeGroupAssignments() {
+    // Check if players have groupOrder property - this indicates groups were manually arranged
+    const hasGroupOrder = this.tournamentPlayers.some(p => typeof p.groupOrder === 'number');
+    
+    // Clear group containers
+    document.getElementById('greenGroupPlayers').innerHTML = '';
+    document.getElementById('blueGroupPlayers').innerHTML = '';
+    document.getElementById('yellowGroupPlayers').innerHTML = '';
+    document.getElementById('pinkGroupPlayers').innerHTML = '';
+    
+    // Group players by their group color
+    const groupedPlayers = {
+      green: [],
+      blue: [],
+      yellow: [],
+      pink: []
+    };
+    
+    // First, try to use existing group info
+    this.tournamentPlayers.forEach(player => {
+      if (player.group && groupedPlayers[player.group]) {
+        groupedPlayers[player.group].push({...player});
       }
     });
     
-    // Add current group if different from last
-    if (playerData.group && (groupHistory.length === 0 || groupHistory[groupHistory.length - 1].group !== playerData.group)) {
-      const arrowEl = document.createElement('span');
-      arrowEl.className = 'timeline-arrow';
-      arrowEl.textContent = '→';
-      groupHistoryEl.appendChild(arrowEl);
+    // If any group is empty, assign players by rating
+    const hasEmptyGroups = Object.values(groupedPlayers).some(group => group.length === 0);
+    
+    if (hasEmptyGroups) {
+      console.log("Some groups are empty, assigning players by rating");
       
-      const groupEl = document.createElement('span');
-      groupEl.className = `timeline-group group-${playerData.group.toLowerCase()}`;
-      groupEl.textContent = `${playerData.group} (Current)`;
-      groupHistoryEl.appendChild(groupEl);
+      // Reset groups
+      groupedPlayers.green = [];
+      groupedPlayers.blue = [];
+      groupedPlayers.yellow = [];
+      groupedPlayers.pink = [];
+      
+      // Sort players by rating
+      const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+      
+      // Distribute players to groups
+      const groupSize = Math.ceil(sortedPlayers.length / 4);
+      
+      sortedPlayers.forEach((player, index) => {
+        if (index < groupSize) {
+          groupedPlayers.green.push({...player, group: 'green'});
+        } else if (index < groupSize * 2) {
+          groupedPlayers.blue.push({...player, group: 'blue'});
+        } else if (index < groupSize * 3) {
+          groupedPlayers.yellow.push({...player, group: 'yellow'});
+        } else {
+          groupedPlayers.pink.push({...player, group: 'pink'});
+        }
+      });
+    }
+    
+    // Sort each group by groupOrder if available, otherwise by rating
+    Object.keys(groupedPlayers).forEach(color => {
+      if (hasGroupOrder) {
+        // Sort by groupOrder if available
+        groupedPlayers[color].sort((a, b) => {
+          // Use groupOrder if both have it
+          if (typeof a.groupOrder === 'number' && typeof b.groupOrder === 'number') {
+            return a.groupOrder - b.groupOrder;
+          }
+          // Fall back to rating if groupOrder is missing
+          return (b.ranking || 0) - (a.ranking || 0);
+        });
+      } else {
+        // Sort by rating
+        groupedPlayers[color].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+      }
+    });
+    
+    // Add players to their group containers
+    groupedPlayers.green.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('greenGroupPlayers').appendChild(playerCard);
+    });
+    
+    groupedPlayers.blue.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('blueGroupPlayers').appendChild(playerCard);
+    });
+    
+    groupedPlayers.yellow.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('yellowGroupPlayers').appendChild(playerCard);
+    });
+    
+    groupedPlayers.pink.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('pinkGroupPlayers').appendChild(playerCard);
+    });
+    
+    console.log("Groups initialized:", {
+      green: groupedPlayers.green.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      blue: groupedPlayers.blue.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      yellow: groupedPlayers.yellow.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      pink: groupedPlayers.pink.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`)
+    });
+  }
+  
+  createPlayerInGroup(player) {
+    const playerCard = document.createElement('div');
+    playerCard.className = 'player-in-group';
+    playerCard.id = `group-${player.id}`;
+    playerCard.draggable = true;
+    playerCard.dataset.player = JSON.stringify(player);
+    
+    playerCard.innerHTML = `
+      <div class="player-controls">
+        <button class="move-up" title="Move Up">▲</button>
+        <button class="move-down" title="Move Down">▼</button>
+      </div>
+      <span class="player-name">${player.name}</span>
+      <span class="player-rating">${player.ranking || 'N/A'}</span>
+    `;
+    
+    // Setup drag listeners
+    playerCard.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('application/json', JSON.stringify(player));
+      playerCard.classList.add('dragging');
+    });
+    
+    playerCard.addEventListener('dragend', () => {
+      playerCard.classList.remove('dragging');
+    });
+    
+    // Setup move up/down buttons
+    const moveUpBtn = playerCard.querySelector('.move-up');
+    const moveDownBtn = playerCard.querySelector('.move-down');
+    
+    moveUpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.movePlayerUp(playerCard);
+    });
+    
+    moveDownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.movePlayerDown(playerCard);
+    });
+    
+    return playerCard;
+  }
+  
+  movePlayerUp(playerCard) {
+    const prevSibling = playerCard.previousElementSibling;
+    if (prevSibling) {
+      const parent = playerCard.parentNode;
+      parent.insertBefore(playerCard, prevSibling);
     }
   }
   
-  // Helper function to generate sample match data
-  function generateSampleMatches(count) {
-    const tournaments = ['Sunday Night Padel', 'Weekend Cup', 'Community League'];
-    const opponents = [
-      'Carlos Mendez & Antonio Carter',
-      'Raul Gonzalez & Olivia Kim',
-      'DaKrote Jackson & Grace Li',
-      'Miguel Fernandez & Kasha Johnson'
+  movePlayerDown(playerCard) {
+    const nextSibling = playerCard.nextElementSibling;
+    if (nextSibling) {
+      const parent = playerCard.parentNode;
+      parent.insertBefore(nextSibling, playerCard);
+    }
+  }
+  
+  initializeGroupDragAndDrop() {
+    const groupContainers = [
+      document.getElementById('greenGroupPlayers'),
+      document.getElementById('blueGroupPlayers'),
+      document.getElementById('yellowGroupPlayers'),
+      document.getElementById('pinkGroupPlayers')
     ];
     
-    const matches = [];
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 3);
-    
-    for (let i = 0; i < count; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i * 7); // One match per week
-      
-      const isWin = Math.random() > 0.4; // 60% win rate
-      const points = (Math.random() * 5 + 20).toFixed(1); // Random points between 20-25
-      
-      matches.push({
-        date: date.toISOString(),
-        tournament: tournaments[i % tournaments.length],
-        opponent: opponents[i % opponents.length],
-        score: isWin ? '7-5' : '5-7',
-        result: isWin ? 'win' : 'loss',
-        points: points
-      });
-    }
-    
-    // Sort by date (newest first)
-    return matches.sort((a, b) => new Date(b.date) - new Date(a.date));
+    groupContainers.forEach(container => {
+      if (container) {
+        this.setupGroupDropZone(container);
+      }
+    });
   }
   
-  // Helper function to generate sample tournament data
-  function generateSampleTournaments(count) {
-    const tournamentNames = ['Sunday Night Padel', 'Weekend Cup', 'Community League'];
-    const groups = ['Hot', 'Sweat', 'Warm', 'Star'];
+  setupGroupDropZone(element) {
+    element.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      element.classList.add('drag-over');
+    });
     
-    const tournaments = [];
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 6);
+    element.addEventListener('dragleave', () => {
+      element.classList.remove('drag-over');
+    });
     
-    for (let i = 0; i < count; i++) {
-      const date = new Date(startDate);
-      date.setMonth(date.getMonth() + i);
-      
-      const position = Math.floor(Math.random() * 8) + 1; // Random position 1-8
-      const totalPlayers = 16;
-      const points = (Math.random() * 10 + 20).toFixed(1); // Random points between 20-30
-      
-      tournaments.push({
-        id: `tour-${i}`,
-        name: tournamentNames[i % tournamentNames.length],
-        date: date.toISOString(),
-        group: groups[i % groups.length],
-        position: position,
-        totalPlayers: totalPlayers,
-        points: points,
-        gamesWon: Math.floor(Math.random() * 15) + 5, // 5-20 games won
-        gamesLost: Math.floor(Math.random() * 10) + 1 // 1-10 games lost
-      });
-    }
-    
-    // Sort by date (newest first)
-    return tournaments.sort((a, b) => new Date(b.date) - new Date(a.date));
+    element.addEventListener('drop', (e) => this.handleGroupDrop(e, element));
   }
   
-  // Helper function to generate sample rating history
-  function generateSampleRatingHistory(count) {
-    const history = [];
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - count);
+  handleGroupDrop(e, dropZone) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
     
-    const startRating = (playerData.ranking || 20) - Math.random() * 5;
-    
-    for (let i = 0; i < count; i++) {
-      const date = new Date(startDate);
-      date.setMonth(date.getMonth() + i);
+    try {
+      const playerData = JSON.parse(e.dataTransfer.getData('application/json'));
+      const existingCard = document.getElementById(`group-${playerData.id}`);
       
-      // Gradually increase rating with some randomness
-      const rating = startRating + (i * 0.5) + (Math.random() * 2 - 1);
+      if (existingCard) {
+        existingCard.remove();
+      }
       
-      history.push({
-        date: date.toISOString(),
-        rating: Math.max(1, Math.min(40, rating)).toFixed(1)
-      });
+      // Determine which group the player is being dropped into
+      let newGroup;
+      if (dropZone.id === 'greenGroupPlayers') {
+        newGroup = 'green';
+      } else if (dropZone.id === 'blueGroupPlayers') {
+        newGroup = 'blue';
+      } else if (dropZone.id === 'yellowGroupPlayers') {
+        newGroup = 'yellow';
+      } else if (dropZone.id === 'pinkGroupPlayers') {
+        newGroup = 'pink';
+      }
+      
+      // Update player's group
+      playerData.group = newGroup;
+      
+      // Create new player card in the group
+      const playerCard = this.createPlayerInGroup(playerData);
+      dropZone.appendChild(playerCard);
+      
+    } catch (error) {
+      console.error('Error handling group drop:', error);
     }
-    
-    return history;
   }
+  
+  async saveGroups() {
+    try {
+      // Show loading
+      Swal.fire({
+        title: 'Saving groups...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      // Collect all players from groups
+      const groupedPlayers = [];
+      
+      // Green group
+      document.querySelectorAll('#greenGroupPlayers .player-in-group').forEach((card, index) => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'green';
+          player.groupOrder = index; // Save the order within the group
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Blue group
+      document.querySelectorAll('#blueGroupPlayers .player-in-group').forEach((card, index) => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'blue';
+          player.groupOrder = index; // Save the order within the group
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Yellow group
+      document.querySelectorAll('#yellowGroupPlayers .player-in-group').forEach((card, index) => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'yellow';
+          player.groupOrder = index; // Save the order within the group
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Pink group
+      document.querySelectorAll('#pinkGroupPlayers .player-in-group').forEach((card, index) => {
+        try {
+          const player = JSON.parse(card.dataset.player);
+          player.group = 'pink';
+          player.groupOrder = index; // Save the order within the group
+          groupedPlayers.push(player);
+        } catch (error) {
+          console.warn('Error parsing player data:', error);
+        }
+      });
+      
+      // Update tournament players with group info
+      this.tournamentPlayers = this.tournamentPlayers.map(player => {
+        const groupedPlayer = groupedPlayers.find(p => p.id === player.id);
+        if (groupedPlayer) {
+          player.group = groupedPlayer.group;
+          player.groupOrder = groupedPlayer.groupOrder;
+        }
+        return player;
+      });
+      
+      // Save to Firebase
+      await firebaseService.updateTournamentPlayers(
+        this.selectedTournamentId,
+        this.tournamentPlayers
+      );
+      
+      Swal.close();
+      
+      // Ask if user wants to go directly to the bracket view
+      const result = await Swal.fire({
+        title: 'Groups Saved!',
+        text: 'Do you want to go to the tournament bracket now?',
+        icon: 'success',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, go to bracket',
+        cancelButtonText: 'No, stay here'
+      });
+      
+      if (result.isConfirmed) {
+        window.location.href = 'tournament-bracket-Americano.html';
+      }
+      
+    } catch (error) {
+      Swal.close();
+      console.error('Error saving groups:', error);
+      Swal.fire('Error', 'Failed to save group assignments. Please try again.', 'error');
+    }
+  }
+  
+  resetGroups() {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'This will reset all group assignments!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reset it!',
+      cancelButtonText: 'No, keep it',
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.initializeGroupAssignments();
+        Swal.fire('Reset!', 'Group assignments have been reset.', 'success');
+      }
+    });
+  }
+  
+  // Cleanup listeners when page unloads
+  cleanup() {
+    this.unsubscribeFunctions.forEach(unsubscribe => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    });
+  }
+}
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  const manager = new TournamentManager();
+  
+  // Clean up listeners when page is unloaded
+  window.addEventListener('beforeunload', () => {
+    manager.cleanup();
+  });
+  
+  // Make manager available globally for debugging
+  window.tournamentManager = manager;
 });
+
+// Export the class for module usage
+export default TournamentManager;
