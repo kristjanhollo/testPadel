@@ -917,8 +917,8 @@ class TournamentManager {
   }
   
   initializeGroupAssignments() {
-    // Sort players by rating
-    const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+    // Check if players have groupOrder property - this indicates groups were manually arranged
+    const hasGroupOrder = this.tournamentPlayers.some(p => typeof p.groupOrder === 'number');
     
     // Clear group containers
     document.getElementById('greenGroupPlayers').innerHTML = '';
@@ -926,30 +926,96 @@ class TournamentManager {
     document.getElementById('yellowGroupPlayers').innerHTML = '';
     document.getElementById('pinkGroupPlayers').innerHTML = '';
     
-    // Distribute players to groups based on rating
-    const groupSize = Math.ceil(sortedPlayers.length / 4);
+    // Group players by their group color
+    const groupedPlayers = {
+      green: [],
+      blue: [],
+      yellow: [],
+      pink: []
+    };
     
-    sortedPlayers.forEach((player, index) => {
-      let groupContainer;
+    // First, try to use existing group info
+    this.tournamentPlayers.forEach(player => {
+      if (player.group && groupedPlayers[player.group]) {
+        groupedPlayers[player.group].push({...player});
+      }
+    });
+    
+    // If any group is empty, assign players by rating
+    const hasEmptyGroups = Object.values(groupedPlayers).some(group => group.length === 0);
+    
+    if (hasEmptyGroups) {
+      console.log("Some groups are empty, assigning players by rating");
       
-      if (index < groupSize) {
-        groupContainer = document.getElementById('greenGroupPlayers');
-        player.group = 'green';
-      } else if (index < groupSize * 2) {
-        groupContainer = document.getElementById('blueGroupPlayers');
-        player.group = 'blue';
-      } else if (index < groupSize * 3) {
-        groupContainer = document.getElementById('yellowGroupPlayers');
-        player.group = 'yellow';
+      // Reset groups
+      groupedPlayers.green = [];
+      groupedPlayers.blue = [];
+      groupedPlayers.yellow = [];
+      groupedPlayers.pink = [];
+      
+      // Sort players by rating
+      const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
+      
+      // Distribute players to groups
+      const groupSize = Math.ceil(sortedPlayers.length / 4);
+      
+      sortedPlayers.forEach((player, index) => {
+        if (index < groupSize) {
+          groupedPlayers.green.push({...player, group: 'green'});
+        } else if (index < groupSize * 2) {
+          groupedPlayers.blue.push({...player, group: 'blue'});
+        } else if (index < groupSize * 3) {
+          groupedPlayers.yellow.push({...player, group: 'yellow'});
+        } else {
+          groupedPlayers.pink.push({...player, group: 'pink'});
+        }
+      });
+    }
+    
+    // Sort each group by groupOrder if available, otherwise by rating
+    Object.keys(groupedPlayers).forEach(color => {
+      if (hasGroupOrder) {
+        // Sort by groupOrder if available
+        groupedPlayers[color].sort((a, b) => {
+          // Use groupOrder if both have it
+          if (typeof a.groupOrder === 'number' && typeof b.groupOrder === 'number') {
+            return a.groupOrder - b.groupOrder;
+          }
+          // Fall back to rating if groupOrder is missing
+          return (b.ranking || 0) - (a.ranking || 0);
+        });
       } else {
-        groupContainer = document.getElementById('pinkGroupPlayers');
-        player.group = 'pink';
+        // Sort by rating
+        groupedPlayers[color].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
       }
-      
-      if (groupContainer) {
-        const playerCard = this.createPlayerInGroup(player);
-        groupContainer.appendChild(playerCard);
-      }
+    });
+    
+    // Add players to their group containers
+    groupedPlayers.green.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('greenGroupPlayers').appendChild(playerCard);
+    });
+    
+    groupedPlayers.blue.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('blueGroupPlayers').appendChild(playerCard);
+    });
+    
+    groupedPlayers.yellow.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('yellowGroupPlayers').appendChild(playerCard);
+    });
+    
+    groupedPlayers.pink.forEach(player => {
+      const playerCard = this.createPlayerInGroup(player);
+      document.getElementById('pinkGroupPlayers').appendChild(playerCard);
+    });
+    
+    console.log("Groups initialized:", {
+      green: groupedPlayers.green.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      blue: groupedPlayers.blue.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      yellow: groupedPlayers.yellow.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
+      pink: groupedPlayers.pink.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`)
     });
   }
   
