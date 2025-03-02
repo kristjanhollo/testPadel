@@ -45,33 +45,23 @@ class TournamentManager {
       
       Swal.close();
       
-      this.initializeCourts();
-      await this.loadPlayers();
-      this.initializeControls();
-      this.initializeDragAndDrop();
-      this.initializeSearchFunctionality();
-      this.initializeQuickAdd();
-      this.updateTournamentDisplay();
+      this.showGroupAssignmentsSection();
+      this.initializeGroupAssignments();
+      this.initializeGroupDragAndDrop();
       
-      // Show/hide sections based on tournament format
+      // Kontrolli, kas bracket eksisteerib ja taasta grupid sellest
       if (this.tournamentData && this.tournamentData.format === 'Americano') {
-        // For Americano format, show group assignments and hide court assignments
-        this.showGroupAssignmentsSection();
-        this.initializeGroupAssignments();
-        this.initializeGroupDragAndDrop();
-        
-        // Hide court assignments section
-        const courtsSection = document.querySelector('.courts-section');
-        if (courtsSection) {
-          courtsSection.style.display = 'none';
+        const americanoBracketData = await firebaseService.getTournamentBracketAmericano(this.selectedTournamentId);
+        if (americanoBracketData) {
+          this.restoreGroupsFromBracket(americanoBracketData);
         }
       } else {
-        // For other formats, hide group assignments
-        const groupAssignmentsSection = document.getElementById('groupAssignmentsSection');
-        if (groupAssignmentsSection) {
-          groupAssignmentsSection.style.display = 'none';
+        const bracketData = await firebaseService.getTournamentBracket(this.selectedTournamentId);
+        if (bracketData) {
+          this.restoreGroupsFromBracket(bracketData);
         }
       }
+      
     } catch (error) {
       Swal.close();
       console.error('Error initializing tournament management:', error);
@@ -696,14 +686,18 @@ async loadPlayers() {
       </div>
     `;
   }
+    initializeControls() {
+      const setFirstRoundBtn = document.getElementById('setFirstRound');
+      const resetBtn = document.getElementById('resetAssignments');
+      const autoAssignBtn = document.getElementById('autoAssignPlayers');
+      const saveGroupsBtn = document.getElementById('saveGroups'); // LISA SEE RIDA
+      
+      setFirstRoundBtn.addEventListener('click', () => this.createFirstRound());
+      resetBtn.addEventListener('click', () => this.resetAssignments());
+      if (saveGroupsBtn) {
+        saveGroupsBtn.addEventListener('click', () => this.saveGroupAssignments());
+      }
 
-  initializeControls() {
-    const setFirstRoundBtn = document.getElementById('setFirstRound');
-    const resetBtn = document.getElementById('resetAssignments');
-    const autoAssignBtn = document.getElementById('autoAssignPlayers');
-
-    setFirstRoundBtn.addEventListener('click', () => this.createFirstRound());
-    resetBtn.addEventListener('click', () => this.resetAssignments());
     if (autoAssignBtn) {
       autoAssignBtn.addEventListener('click', () => {
         Swal.fire({
@@ -728,218 +722,240 @@ async loadPlayers() {
   }
 
   async createFirstRound() {
-    if (!this.selectedTournamentId) {
-      console.error('No selected tournament ID');
-      return;
-    }
-
     try {
-      // Show loading
-      Swal.fire({
-        title: 'Creating first round...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
+        // Get and sort players by ranking for each group
+        const [greenGroupPlayers, blueGroupPlayers, yellowGroupPlayers, pinkGroupPlayers] = 
+            await Promise.all([
+                this.getGroupPlayers('green'),
+                this.getGroupPlayers('blue'),
+                this.getGroupPlayers('yellow'),
+                this.getGroupPlayers('pink')
+            ]);
+
+        // Sort players by ranking in each group
+        const sortByRanking = players => players.sort((a, b) => b.ranking - a.ranking);
+        
+        const sortedGroups = {
+            green: sortByRanking(greenGroupPlayers),
+            blue: sortByRanking(blueGroupPlayers),
+            yellow: sortByRanking(yellowGroupPlayers),
+            pink: sortByRanking(pinkGroupPlayers)
+        };
+
+        let matches = [];
+
+        if (this.tournamentData.format === 'Americano') {
+            // Create matches between groups (Green vs Blue, Yellow vs Pink)
+            matches = [
+                ...this.createMatchesBetweenGroups(sortedGroups.green, sortedGroups.blue),
+                ...this.createMatchesBetweenGroups(sortedGroups.yellow, sortedGroups.pink)
+            ];
+        } else {
+            // Create matches within each group for Mexicano format
+            matches = [
+                ...this.createMatchesWithinGroup(sortedGroups.green),
+                ...this.createMatchesWithinGroup(sortedGroups.blue),
+                ...this.createMatchesWithinGroup(sortedGroups.yellow),
+                ...this.createMatchesWithinGroup(sortedGroups.pink)
+            ];
+        }
+
+        // Save brackets to database
+        await this.saveBracket(matches, 1);
+        
+        return matches;
+
+    } catch (error) {
+        console.error('Error in createFirstRound:', error);
+        throw new Error(`Failed to create first round: ${error.message}`);
+    }
+}
+/**
+ * Taastab mängijate gruppide info bracketi andmetest
+ * @param {Object} bracketData - Bracketi andmed
+ */
+restoreGroupsFromBracket(bracketData) {
+  // Tühjenda kõik grupid
+  document.getElementById('greenGroupPlayers').innerHTML = '';
+  document.getElementById('blueGroupPlayers').innerHTML = '';
+  document.getElementById('yellowGroupPlayers').innerHTML = '';
+  document.getElementById('pinkGroupPlayers').innerHTML = '';
+  
+  // Kui tegu on Mexicano formaadiga
+  if (this.tournamentData.format === 'Mexicano') {
+    // Taastame grupid kourtide järgi
+    bracketData.courts.forEach((court, index) => {
+      if (!court.matches || court.matches.length === 0) return;
+      
+      const match = court.matches[0]; // Esimene mäng kourtil
+      const allPlayers = [...(match.team1 || []), ...(match.team2 || [])];
+      const groupColor = this.getGroupColorForCourtIndex(index);
+      
+      // Lisa mängijad vastavasse gruppi
+      allPlayers.forEach(player => {
+        if (player && player.id) {
+          // Lisa grupi info mängijale
+          player.group = groupColor;
+          
+          // Lisa mängija gruppi
+          const playerCard = this.createPlayerInGroup(player);
+          document.getElementById(`${groupColor}GroupPlayers`).appendChild(playerCard);
         }
       });
-      
-      // Get court assignments from UI
-      const courtAssignments = this.getCourtAssignmentsFromUI();
-      
-      // Validate courts are filled
-      if (!this.validateCourtAssignments(courtAssignments)) {
-        Swal.close();
-        Swal.fire({
-          title: 'Incomplete Courts',
-          text: 'Please assign players to all courts before creating the first round.',
-          icon: 'warning'
-        });
-        return;
-      }
-      
-      // Create bracket data
-      const bracketData = {
-        tournamentId: this.selectedTournamentId,
-        format: this.tournamentData.format,
-        currentRound: 1,
-        courts: this.COURT_ORDER.map((courtName, index) => {
-          const courtId = `court-${index + 1}`;
-          const courtPlayers = this.getPlayersForCourt(courtId);
-          
-          return {
-            name: courtName,
-            matches: [{
-              id: `match-${Date.now()}-${index}`,
-              team1: [courtPlayers[0], courtPlayers[1]],
-              team2: [courtPlayers[2], courtPlayers[3]],
-              score1: null,
-              score2: null,
-              completed: false,
-              round: 1,
-              courtName
-            }]
-          };
-        }),
-        completedMatches: [],
-        standings: this.tournamentPlayers.slice(0, 16).map(player => ({
-          id: player.id,
-          name: player.name,
-          points: 0,
-          wins: 0,
-          losses: 0,
-          gamesPlayed: 0,
-          rating: player.ranking,
-        })),
-      };
-
-      // For Americano format, we need to adjust the data structure
-      if (this.tournamentData.format === 'Americano') {
-        console.log('Creating Americano format bracket');
-        
-        // Create specific Americano structure
-        const americanoBracketData = {
-          format: 'Americano',
-          currentRound: 1,
-          rounds: [
-            { number: 1, completed: false, matches: [] },
-            { number: 2, completed: false, matches: [] },
-            { number: 3, completed: false, matches: [] },
-            { number: 4, completed: false, matches: [] }
-          ],
-          completedMatches: [],
-          standings: this.tournamentPlayers.slice(0, 16).map(player => {
-            // Use player's group if it exists, otherwise determine based on rank
-            if (player.group) {
-              return {
-                id: player.id,
-                name: player.name,
-                group: player.group,
-                points: 0,
-                gamesPlayed: 0,
-                wins: 0,
-                losses: 0
-              };
-            } else {
-              // Determine group based on rank
-              const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => b.ranking - a.ranking);
-              const playerIndex = sortedPlayers.findIndex(p => p.id === player.id);
-              const groupSize = Math.ceil(sortedPlayers.length / 4);
-              
-              let group = 'green';
-              if (playerIndex < groupSize) {
-                group = 'green'; // Top group
-              } else if (playerIndex < groupSize * 2) {
-                group = 'blue'; // Second group
-              } else if (playerIndex < groupSize * 3) {
-                group = 'yellow'; // Third group
-              } else {
-                group = 'pink'; // Bottom group
-              }
-              
-              return {
-                id: player.id,
-                name: player.name,
-                group: group,
-                points: 0,
-                gamesPlayed: 0,
-                wins: 0,
-                losses: 0
-              };
-            }
-          })
-        };
-        
-        // Add matches to the first round
-        const firstRound = americanoBracketData.rounds[0];
-        
-        console.log("===== AMERICANO FORMAADI PAARIDE MOODUSTAMINE =====");
-        
-        // Group players by their assigned courts (which reflects their group)
-        this.COURT_ORDER.forEach((courtName, index) => {
-          const courtId = `court-${index + 1}`;
-          const courtPlayers = this.getPlayersForCourt(courtId);
-          const groupColor = ['green', 'blue', 'yellow', 'pink'][index];
-          
-          console.log(`\n----- TÖÖTLEN VÄLJAKUT: ${courtName} (${groupColor}) -----`);
-          
-          if (courtPlayers.length === 4) {
-            // Log players before sorting
-            console.log("MÄNGIJAD ENNE SORTEERIMIST:", 
-              courtPlayers.map(p => `${p.name} (${p.ranking || 0})`).join(", "));
-            
-            // Sort players by rating before creating pairs
-            const sortedPlayers = [...courtPlayers].sort((a, b) => b.ranking - a.ranking);
-            
-            // Log players after sorting
-            console.log("MÄNGIJAD PÄRAST SORTEERIMIST:", 
-              sortedPlayers.map((p, i) => `${i+1}. ${p.name} (${p.ranking || 0})`).join(", "));
-            
-            // Americano format for Round 1: 1&4 vs 2&3 (according to the table)
-            console.log("PAARIDE MOODUSTAMINE AMERICANO REEGLITE JÄRGI (1&4 vs 2&3):");
-            console.log(`TEAM1: ${sortedPlayers[0].name} & ${sortedPlayers[3].name} (nr 1 & nr 4)`);
-            console.log(`TEAM2: ${sortedPlayers[1].name} & ${sortedPlayers[2].name} (nr 2 & nr 3)`);
-            
-            const match = {
-              id: `match-${Date.now()}-1-${groupColor}-${index}`,
-              court: courtName,
-              team1: [sortedPlayers[0], sortedPlayers[3]], // 1&4 (highest and lowest)
-              team2: [sortedPlayers[1], sortedPlayers[2]], // 2&3 (second and third highest)
-              score1: null,
-              score2: null,
-              completed: false,
-              round: 1,
-              groupColor: groupColor
-            };
-            
-            firstRound.matches.push(match);
-            
-            console.log(`LOODUD MÄNG VÄLJAKUL ${courtName}:`);
-            console.log(`  TEAM1: ${match.team1.map(p => p.name).join(" & ")}`);
-            console.log(`  TEAM2: ${match.team2.map(p => p.name).join(" & ")}`);
-          } else {
-            console.warn(`VIGA: Väljakul ${courtName} pole piisavalt mängijaid (${courtPlayers.length})`);
+    });
+  } 
+  // Kui tegu on Americano formaadiga
+  else if (bracketData.rounds && bracketData.rounds.length > 0) {
+    const firstRound = bracketData.rounds[0];
+    
+    // Grupeeri mängijad värvi järgi
+    const playersByGroup = {
+      green: [],
+      blue: [],
+      yellow: [],
+      pink: []
+    };
+    
+    // Kogu mängijad gruppide järgi
+    firstRound.matches.forEach(match => {
+      if (match.groupColor) {
+        const allPlayers = [...(match.team1 || []), ...(match.team2 || [])];
+        allPlayers.forEach(player => {
+          if (player && player.id) {
+            player.group = match.groupColor;
+            playersByGroup[match.groupColor].push(player);
           }
         });
-        
-        console.log("===== AMERICANO FORMAADI PAARIDE MOODUSTAMINE LÕPETATUD =====");
-        
-        // Save using Americano specific method
-        await firebaseService.saveTournamentBracketAmericano(
-          this.selectedTournamentId,
-          americanoBracketData
-        );
-      } else {
-        // For Mexicano format, use standard bracket structure
-        console.log('Creating Mexicano format bracket');
-        await firebaseService.saveTournamentBracket(
-          this.selectedTournamentId,
-          bracketData
-        );
       }
-
-      // Update tournament status to ongoing
-      await firebaseService.updateTournament(
-        this.selectedTournamentId,
-        { status_id: 2 } // 2 = ongoing
-      );
-      
-      Swal.close();
-      
-      // Navigate to appropriate bracket view
-      window.location.href = this.tournamentData.format === 'Americano' 
-        ? 'tournament-bracket-Americano.html' 
-        : 'tournament-bracket-M.html';
-        
-    } catch (error) {
-      Swal.close();
-      console.error('Error creating first round:', error);
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to create the first round. Please try again.',
-        icon: 'error'
+    });
+    
+    // Lisa mängijad grupikontainebritesse
+    Object.keys(playersByGroup).forEach(color => {
+      playersByGroup[color].forEach(player => {
+        const playerCard = this.createPlayerInGroup(player);
+        document.getElementById(`${color}GroupPlayers`).appendChild(playerCard);
       });
-    }
+    });
   }
+}
+
+/**
+ * Abifunktsioon, mis tagastab grupi värvi courtiindeksi järgi
+ * @param {number} courtIndex - Courtiindeks
+ * @returns {string} Grupi värv
+ */
+getGroupColorForCourtIndex(courtIndex) {
+  const colors = ['green', 'blue', 'yellow', 'pink'];
+  return colors[Math.min(courtIndex, colors.length - 1)];
+}
+
+getGroupPlayers(groupColor) {
+  const players = [];
+  document.querySelectorAll(`#${groupColor}GroupPlayers .player-in-group`).forEach(card => {
+      try {
+          const player = JSON.parse(card.dataset.player);
+          players.push(player);
+      } catch (error) {
+          console.warn('Error parsing player data:', error);
+      }
+  });
+  return players;
+}
+/**
+ * Salvestab mängijate grupikuuluvuse andmebaasi
+ */
+async saveGroups() {
+  try {
+    // Näita laadimisanimatsiooni
+    Swal.fire({
+      title: 'Saving group assignments...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    // Kogu gruppide info
+    const groupAssignments = {
+      green: this.getGroupPlayers('green'),
+      blue: this.getGroupPlayers('blue'),
+      yellow: this.getGroupPlayers('yellow'),
+      pink: this.getGroupPlayers('pink')
+    };
+    
+    // Uuenda turniirimängijate grupikuuluvust
+    this.tournamentPlayers = this.tournamentPlayers.map(player => {
+      // Otsi mängija kõigist gruppidest
+      for (const [color, players] of Object.entries(groupAssignments)) {
+        const groupPlayer = players.find(p => p.id === player.id);
+        if (groupPlayer) {
+          player.group = color;
+          break;
+        }
+      }
+      return player;
+    });
+    
+    // Salvesta andmebaasi
+    await firebaseService.updateTournamentPlayers(
+      this.selectedTournamentId,
+      this.tournamentPlayers
+    );
+    
+    Swal.close();
+    
+    // Määra õige bracketi URL sõltuvalt formaadist
+    const bracketUrl = this.tournamentData.format === 'Americano' 
+      ? 'tournament-bracket-Americano.html' 
+      : 'tournament-bracket-M.html';
+    
+    // Küsi, kas kasutaja soovib liikuda bracketi vaatele
+    const result = await Swal.fire({
+      title: 'Groups Saved!',
+      text: 'Do you want to go to the tournament bracket now?',
+      icon: 'success',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, go to bracket',
+      cancelButtonText: 'No, stay here'
+    });
+    
+    if (result.isConfirmed) {
+      window.location.href = bracketUrl;
+    }
+    
+  } catch (error) {
+    Swal.close();
+    console.error('Error saving groups:', error);
+    Swal.fire('Error', 'Failed to save group assignments. Please try again.', 'error');
+  }
+}
+
+
+createMatchesBetweenGroups(group1, group2) {
+    return group1.map((player1, index) => ({
+        player1: player1,
+        player2: group2[index],
+        round: 1,
+        score: { set1: '', set2: '', set3: '' },
+        timestamp: new Date()
+    }));
+}
+
+createMatchesWithinGroup(group) {
+    const matches = [];
+    for (let i = 0; i < group.length - 1; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+            matches.push({
+                player1: group[i],
+                player2: group[j],
+                round: 1,
+                score: { set1: '', set2: '', set3: '' },
+                timestamp: new Date()
+            });
+        }
+    }
+    return matches;
+}
 
   async updateTournamentDisplay() {
     if (!this.tournamentData) return;
@@ -1099,6 +1115,81 @@ async loadPlayers() {
 
     element.addEventListener('drop', (e) => this.handleDrop(e, element));
   }
+  /**
+ * Lisab auto-assign nupud grupikontaineritesse
+ */
+addGroupAutoAssignButtons() {
+  const colors = ['green', 'blue', 'yellow', 'pink'];
+  
+  colors.forEach(color => {
+    const container = document.getElementById(`${color}GroupPlayers`);
+    if (!container) return;
+    
+    // Kontrolli, kas nupp juba eksisteerib
+    if (container.querySelector('.group-auto-assign-btn')) return;
+    
+    // Loo nupp
+    const btn = document.createElement('button');
+    btn.className = 'group-auto-assign-btn';
+    btn.textContent = 'Auto Assign';
+    btn.onclick = () => this.autoAssignPlayersToGroup(color);
+    
+    // Lisa nupp konteineri algusesse
+    container.parentNode.insertBefore(btn, container);
+  });
+}
+
+/**
+ * Paigutab mängijad automaatselt kindlasse gruppi
+ * @param {string} groupColor - Grupi värv
+ */
+autoAssignPlayersToGroup(groupColor) {
+  // Kontrolli, mitu mängijat gruppi mahub
+  const targetGroupSize = 4; // Võib muuta vastavalt vajadusele
+  
+  // Sorteeri turniirimängijad reitingu järgi
+  const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => 
+    (b.ranking || 0) - (a.ranking || 0)
+  );
+  
+  // Määra mängijate vahemik reitingu järgi
+  let playersForGroup = [];
+  
+  switch(groupColor) {
+    case 'green': // Top mängijad
+      playersForGroup = sortedPlayers.slice(0, targetGroupSize);
+      break;
+    case 'blue': // 2. tase
+      playersForGroup = sortedPlayers.slice(targetGroupSize, targetGroupSize * 2);
+      break;
+    case 'yellow': // 3. tase
+      playersForGroup = sortedPlayers.slice(targetGroupSize * 2, targetGroupSize * 3);
+      break;
+    case 'pink': // 4. tase
+      playersForGroup = sortedPlayers.slice(targetGroupSize * 3, targetGroupSize * 4);
+      break;
+  }
+  
+  // Tühjenda grupp
+  const groupContainer = document.getElementById(`${groupColor}GroupPlayers`);
+  groupContainer.innerHTML = '';
+  
+  // Lisa mängijad gruppi
+  playersForGroup.forEach(player => {
+    player.group = groupColor; // Määra mängija grupp
+    const playerCard = this.createPlayerInGroup(player);
+    groupContainer.appendChild(playerCard);
+  });
+  
+  // Näita teadet
+  Swal.fire({
+    title: 'Group Updated',
+    text: `Players have been automatically assigned to ${groupColor} group based on ratings.`,
+    icon: 'success',
+    timer: 2000,
+    showConfirmButton: false
+  });
+}
 
   handleDrop(e, dropZone) {
     e.preventDefault();
