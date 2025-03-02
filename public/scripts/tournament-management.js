@@ -262,7 +262,7 @@ async loadPlayers() {
     }
     
     // For testing purposes only - handle test mode separately
-    if (IsTest === true && this.tournamentPlayers.length === 0) {
+    /*if (IsTest === true && this.tournamentPlayers.length === 0) {
       console.log("Test mode: Auto-loading 16 random players");
       
       // Ensure we have enough players in the database
@@ -288,7 +288,7 @@ async loadPlayers() {
       
       // Auto-assign for test mode
       this.autoAssignTopPlayers();
-    }
+    }*/
   } catch (error) {
     console.error('Error loading players:', error);
     Swal.fire('Error', 'Failed to load players', 'error');
