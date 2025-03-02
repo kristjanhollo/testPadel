@@ -163,51 +163,137 @@ class TournamentManager {
     }
   }
 
-  // Add these methods to your TournamentManager class
-
-  async loadPlayers() {
-    try {
-      // Get all registered players
-      this.registeredPlayers = await firebaseService.getAllPlayers();
+restoreCourtAssignmentsFromBracket(bracketData) {
+  // Clear any existing assignments
+  this.assignedPlayers.clear();
+  
+  // Loop through courts in the bracket
+  bracketData.courts.forEach((court, courtIndex) => {
+    if (court.matches && court.matches.length > 0) {
+      const match = court.matches[0]; // First match in the court
       
-      // Get tournament players
-      this.tournamentPlayers = await firebaseService.getTournamentPlayers(
-        this.selectedTournamentId
-      );
-      console.log(IsTest);
-      // For testing: quick load 16 random players if IsTest is true and no players are loaded yet
-      if (IsTest === true && this.tournamentPlayers.length === 0) {
-        console.log("Test mode: Auto-loading 16 random players");
-        
-        // Ensure we have enough players in the database
-        if (this.registeredPlayers.length >= 16) {
-          // Shuffle the array of players to get random selection
-          const shuffledPlayers = [...this.registeredPlayers].sort(() => 0.5 - Math.random());
-          // Take the first 16 players
-          this.tournamentPlayers = shuffledPlayers.slice(0, 16);
-        } else {
-          // If not enough players, take all available and log a warning
-          console.warn(`Test mode: Only ${this.registeredPlayers.length} players available`);
-          this.tournamentPlayers = [...this.registeredPlayers];
-        }
-        
-        // Sort by ranking for better court assignments
-        this.tournamentPlayers.sort((a, b) => b.ranking - a.ranking);
-        
-        // Save to Firebase
-        await firebaseService.updateTournamentPlayers(
-          this.selectedTournamentId,
-          this.tournamentPlayers
-        );
+      // Assign team 1 players
+      if (match.team1 && match.team1.length >= 2) {
+        this.assignPlayerToSlot(match.team1[0], `court-${courtIndex + 1}`, 1, 1);
+        this.assignPlayerToSlot(match.team1[1], `court-${courtIndex + 1}`, 1, 2);
       }
       
-      this.initializePlayers();
-      this.autoAssignTopPlayers();
-    } catch (error) {
-      console.error('Error loading players:', error);
-      Swal.fire('Error', 'Failed to load players', 'error');
+      // Assign team 2 players
+      if (match.team2 && match.team2.length >= 2) {
+        this.assignPlayerToSlot(match.team2[0], `court-${courtIndex + 1}`, 2, 1);
+        this.assignPlayerToSlot(match.team2[1], `court-${courtIndex + 1}`, 2, 2);
+      }
     }
+  });
+}
+
+restoreAmericanoAssignmentsFromBracket(bracketData) {
+  // Clear any existing assignments
+  this.assignedPlayers.clear();
+  
+  // Get first round matches
+  const firstRound = bracketData.rounds[0];
+  if (!firstRound || !firstRound.matches || firstRound.matches.length === 0) {
+    return;
   }
+  
+  // Group matches by their group color
+  const groupColors = ['green', 'blue', 'yellow', 'pink'];
+  
+  groupColors.forEach((color, courtIndex) => {
+    // Find match for this group
+    const match = firstRound.matches.find(m => m.groupColor === color);
+    if (!match) return;
+    
+    // Assign team 1 players
+    if (match.team1 && match.team1.length >= 2) {
+      this.assignPlayerToSlot(match.team1[0], `court-${courtIndex + 1}`, 1, 1);
+      this.assignPlayerToSlot(match.team1[1], `court-${courtIndex + 1}`, 1, 2);
+    }
+    
+    // Assign team 2 players
+    if (match.team2 && match.team2.length >= 2) {
+      this.assignPlayerToSlot(match.team2[0], `court-${courtIndex + 1}`, 2, 1);
+      this.assignPlayerToSlot(match.team2[1], `court-${courtIndex + 1}`, 2, 2);
+    }
+  });
+}
+
+async loadPlayers() {
+  try {
+    // Get all registered players
+    this.registeredPlayers = await firebaseService.getAllPlayers();
+    
+    // Get tournament players
+    this.tournamentPlayers = await firebaseService.getTournamentPlayers(
+      this.selectedTournamentId
+    );
+    
+    // Initialize players in the UI
+    this.initializePlayers();
+    
+    // Check if there's already a bracket for this tournament
+    let bracketExists = false;
+    
+    if (this.tournamentData && this.tournamentData.format === 'Americano') {
+      // For Americano format
+      const americanoBracketData = await firebaseService.getTournamentBracketAmericano(this.selectedTournamentId);
+      
+      if (americanoBracketData && americanoBracketData.rounds && americanoBracketData.rounds.length > 0 && 
+          americanoBracketData.rounds[0].matches && americanoBracketData.rounds[0].matches.length > 0) {
+        // If bracket exists, restore assignments from it
+        this.restoreAmericanoAssignmentsFromBracket(americanoBracketData);
+        bracketExists = true;
+      }
+    } else {
+      // For other formats (Mexicano)
+      const bracketData = await firebaseService.getTournamentBracket(this.selectedTournamentId);
+      
+      if (bracketData && bracketData.courts && bracketData.courts.length > 0) {
+        // If bracket exists, restore court assignments from it
+        this.restoreCourtAssignmentsFromBracket(bracketData);
+        bracketExists = true;
+      }
+    }
+    
+    // Only auto-assign if no bracket exists
+    if (!bracketExists && IsTest !== true) {
+      this.autoAssignTopPlayers();
+    }
+    
+    // For testing purposes only - handle test mode separately
+    if (IsTest === true && this.tournamentPlayers.length === 0) {
+      console.log("Test mode: Auto-loading 16 random players");
+      
+      // Ensure we have enough players in the database
+      if (this.registeredPlayers.length >= 16) {
+        // Shuffle the array of players to get random selection
+        const shuffledPlayers = [...this.registeredPlayers].sort(() => 0.5 - Math.random());
+        // Take the first 16 players
+        this.tournamentPlayers = shuffledPlayers.slice(0, 16);
+      } else {
+        // If not enough players, take all available and log a warning
+        console.warn(`Test mode: Only ${this.registeredPlayers.length} players available`);
+        this.tournamentPlayers = [...this.registeredPlayers];
+      }
+      
+      // Sort by ranking for better court assignments
+      this.tournamentPlayers.sort((a, b) => b.ranking - a.ranking);
+      
+      // Save to Firebase
+      await firebaseService.updateTournamentPlayers(
+        this.selectedTournamentId,
+        this.tournamentPlayers
+      );
+      
+      // Auto-assign for test mode
+      this.autoAssignTopPlayers();
+    }
+  } catch (error) {
+    console.error('Error loading players:', error);
+    Swal.fire('Error', 'Failed to load players', 'error');
+  }
+}
 
   initializeSearchFunctionality() {
     const searchInput = document.getElementById('searchInput');
@@ -1116,7 +1202,7 @@ class TournamentManager {
       }
     });
   }
-  
+
   getDragAfterElement(container, y) {
     const draggableElements = [...container.querySelectorAll('.player-in-group:not(.dragging)')];
     
