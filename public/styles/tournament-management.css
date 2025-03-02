@@ -300,7 +300,6 @@
   color: #9d174d;
 }
 
-/* Player in Group */
 .player-in-group {
   display: flex;
   justify-content: space-between;
@@ -308,14 +307,74 @@
   background-color: white;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
-  padding: 8px 12px;
+  padding: 10px 15px;
   margin-bottom: 8px;
-  cursor: move;
+  cursor: grab;
   position: relative;
+  transition: all 0.2s ease;
 }
 
 .player-in-group:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+/* Remove the margin-left since we're removing the controls */
+.player-in-group .player-name {
+  font-weight: 500;
+  flex: 1;
+  margin-left: 0;
+}
+
+/* Styling for active dragging state */
+.player-in-group.dragging {
+  opacity: 0.4;
+  border: 1px dashed #94a3b8;
+}
+
+/* The clone that follows the cursor */
+.dragging-clone {
+  pointer-events: none;
+  z-index: 1000;
+  width: calc(100% - 30px);
+  max-width: 250px;
+}
+
+/* Placeholder style */
+.drop-placeholder {
   background-color: #f1f5f9;
+  border: 2px dashed #64748b;
+  border-radius: 4px;
+  margin: 4px 0;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    border-color: #64748b;
+  }
+  50% {
+    border-color: #3b82f6;
+  }
+  100% {
+    border-color: #64748b;
+  }
+}
+
+/* Group container styles when dragging over */
+.group-players.drag-over {
+  background-color: #f8fafc;
+  border: 2px dashed #3b82f6;
+  transition: all 0.2s ease;
+}
+
+/* For mobile devices, adjust for touch interactions */
+@media (max-width: 768px) {
+  .player-in-group {
+    padding: 12px 15px; /* Larger touch target */
+  }
 }
 
 .player-name {

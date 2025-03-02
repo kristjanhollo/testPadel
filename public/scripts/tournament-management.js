@@ -1027,10 +1027,6 @@ class TournamentManager {
     playerCard.dataset.player = JSON.stringify(player);
     
     playerCard.innerHTML = `
-      <div class="player-controls">
-        <button class="move-up" title="Move Up">▲</button>
-        <button class="move-down" title="Move Down">▼</button>
-      </div>
       <span class="player-name">${player.name}</span>
       <span class="player-rating">${player.ranking || 'N/A'}</span>
     `;
@@ -1045,37 +1041,7 @@ class TournamentManager {
       playerCard.classList.remove('dragging');
     });
     
-    // Setup move up/down buttons
-    const moveUpBtn = playerCard.querySelector('.move-up');
-    const moveDownBtn = playerCard.querySelector('.move-down');
-    
-    moveUpBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.movePlayerUp(playerCard);
-    });
-    
-    moveDownBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.movePlayerDown(playerCard);
-    });
-    
     return playerCard;
-  }
-  
-  movePlayerUp(playerCard) {
-    const prevSibling = playerCard.previousElementSibling;
-    if (prevSibling) {
-      const parent = playerCard.parentNode;
-      parent.insertBefore(playerCard, prevSibling);
-    }
-  }
-  
-  movePlayerDown(playerCard) {
-    const nextSibling = playerCard.nextElementSibling;
-    if (nextSibling) {
-      const parent = playerCard.parentNode;
-      parent.insertBefore(nextSibling, playerCard);
-    }
   }
   
   initializeGroupDragAndDrop() {
@@ -1097,13 +1063,73 @@ class TournamentManager {
     element.addEventListener('dragover', (e) => {
       e.preventDefault();
       element.classList.add('drag-over');
+      
+      const afterElement = this.getDragAfterElement(element, e.clientY);
+      const draggable = document.querySelector('.player-in-group.dragging');
+      
+      if (draggable) {
+        if (afterElement == null) {
+          element.appendChild(draggable);
+        } else {
+          element.insertBefore(draggable, afterElement);
+        }
+      }
     });
     
-    element.addEventListener('dragleave', () => {
+    element.addEventListener('dragleave', (e) => {
+      if (e.relatedTarget && !element.contains(e.relatedTarget)) {
+        element.classList.remove('drag-over');
+      }
+    });
+    
+    element.addEventListener('drop', (e) => {
+      e.preventDefault();
       element.classList.remove('drag-over');
+      
+      try {
+        const playerData = JSON.parse(e.dataTransfer.getData('application/json'));
+        const existingCard = document.getElementById(`group-${playerData.id}`);
+        
+        // Determine which group the player is being dropped into
+        let newGroup;
+        if (element.id === 'greenGroupPlayers') {
+          newGroup = 'green';
+        } else if (element.id === 'blueGroupPlayers') {
+          newGroup = 'blue';
+        } else if (element.id === 'yellowGroupPlayers') {
+          newGroup = 'yellow';
+        } else if (element.id === 'pinkGroupPlayers') {
+          newGroup = 'pink';
+        }
+        
+        // Update player's group
+        playerData.group = newGroup;
+        
+        // Create a new player card if it's from a different group
+        if (existingCard && !element.contains(existingCard)) {
+          existingCard.remove();
+          const newCard = this.createPlayerInGroup(playerData);
+          element.appendChild(newCard);
+        }
+      } catch (error) {
+        console.error('Error handling group drop:', error);
+      }
     });
+  }
+  
+  getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.player-in-group:not(.dragging)')];
     
-    element.addEventListener('drop', (e) => this.handleGroupDrop(e, element));
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
   }
   
   handleGroupDrop(e, dropZone) {
