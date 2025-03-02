@@ -42,9 +42,35 @@
 
             <!-- Players Pool Section -->
             <div class="players-section">
-                <h3>Available Players</h3>
-                <div id="playersList" class="players-grid">
-                    <!-- Players will be added here dynamically -->
+                <div class="players-section">
+                    <div class="section-header">
+                        <div class="section-header">
+                            <h3>Available Players</h3>
+                            <button id="quickAddButton" class="btn btn-secondary">Quick Add</button>
+                        </div>
+                        <div id="playersList" class="players-grid">
+                            <!-- Players will be added here dynamically -->
+                        </div>
+                  </div>
+                  
+                  <!-- Quick Add Modal -->
+                  <div id="quickAddModal" class="modal">
+                    <div class="modal-content">
+                      <span class="close-modal">&times;</span>
+                      <h2>Quick Add Players</h2>
+                      <p>Paste player names (one per line). Players must already exist in the database.</p>
+                      <form id="quickAddForm">
+                        <div class="form-group">
+                          <textarea id="playerNames" rows="10" placeholder="Paste player names here (one per line)" required></textarea>
+                        </div>
+                        <div id="quickAddStatus" class="status-message"></div>
+                        <div class="modal-actions">
+                          <button type="button" class="btn btn-secondary close-btn">Cancel</button>
+                          <button type="submit" class="btn btn-primary">Add Players</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
             </div>
 
@@ -98,6 +124,7 @@
                 </div>
                 <div class="control-buttons">
                     <button id="setFirstRound" class="btn-primary">Set as First Round</button>
+                    <button id="autoAssignPlayers" class="btn-secondary">Auto Assign Players</button>
                     <button id="resetAssignments" class="btn-secondary">Reset Assignments</button>
                 </div>
             </div>

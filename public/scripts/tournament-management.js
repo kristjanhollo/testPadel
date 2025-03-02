@@ -50,6 +50,7 @@ class TournamentManager {
       this.initializeControls();
       this.initializeDragAndDrop();
       this.initializeSearchFunctionality();
+      this.initializeQuickAdd();
       this.updateTournamentDisplay();
       
       // Show/hide sections based on tournament format
@@ -146,6 +147,148 @@ class TournamentManager {
       }, 10000);
     });
   }
+  initializeQuickAdd() {
+    const quickAddBtn = document.getElementById('quickAddButton');
+    const modal = document.getElementById('quickAddModal');
+    const closeButtons = modal.querySelectorAll('.close-modal, .close-btn');
+    const form = document.getElementById('quickAddForm');
+    
+    // Show modal when Quick Add button is clicked
+    quickAddBtn.addEventListener('click', () => {
+      modal.style.display = 'block';
+    });
+    
+    // Close modal when close button or outside is clicked
+    closeButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        modal.style.display = 'none';
+        form.reset();
+        document.getElementById('quickAddStatus').className = 'status-message';
+        document.getElementById('quickAddStatus').textContent = '';
+      });
+    });
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+        form.reset();
+        document.getElementById('quickAddStatus').className = 'status-message';
+        document.getElementById('quickAddStatus').textContent = '';
+      }
+    });
+    
+    // Handle form submission
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.handleQuickAddPlayers();
+    });
+  }
+  
+  async handleQuickAddPlayers() {
+    const namesText = document.getElementById('playerNames').value.trim();
+    const statusEl = document.getElementById('quickAddStatus');
+    
+    if (!namesText) {
+      this.showStatus(statusEl, 'Please enter at least one player name', 'error');
+      return;
+    }
+    
+    // Split names by new line
+    const names = namesText.split('\n')
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
+    
+    if (names.length === 0) {
+      this.showStatus(statusEl, 'Please enter at least one valid player name', 'error');
+      return;
+    }
+    
+    // Show loading
+    this.showStatus(statusEl, `Processing ${names.length} player(s)...`, 'warning');
+    
+    try {
+      // Get all players to search by name
+      const allPlayers = this.registeredPlayers;
+      
+      // Track results
+      const results = {
+        added: [],
+        notFound: [],
+        alreadyInTournament: []
+      };
+      
+      // Process each name
+      names.forEach(name => {
+        // Find player in database (case insensitive)
+        const foundPlayer = allPlayers.find(p => 
+          p.name.toLowerCase() === name.toLowerCase());
+        
+        if (!foundPlayer) {
+          results.notFound.push(name);
+          return;
+        }
+        
+        // Check if player is already in tournament
+        const alreadyInTournament = this.tournamentPlayers.some(p => p.id === foundPlayer.id);
+        
+        if (alreadyInTournament) {
+          results.alreadyInTournament.push(name);
+          return;
+        }
+        
+        // Add player to tournament
+        results.added.push(foundPlayer);
+      });
+      
+      // Add found players to tournament
+      if (results.added.length > 0) {
+        this.tournamentPlayers = [...this.tournamentPlayers, ...results.added];
+        
+        // Update in Firebase
+        await firebaseService.updateTournamentPlayers(
+          this.selectedTournamentId,
+          this.tournamentPlayers
+        );
+        
+        // Refresh player list
+        this.initializePlayers();
+      }
+      
+      // Show results
+      let message = '';
+      if (results.added.length > 0) {
+        message += `Added ${results.added.length} player(s) successfully. `;
+      }
+      if (results.notFound.length > 0) {
+        message += `${results.notFound.length} player(s) not found in database. `;
+      }
+      if (results.alreadyInTournament.length > 0) {
+        message += `${results.alreadyInTournament.length} player(s) already in tournament.`;
+      }
+      
+      this.showStatus(statusEl, message, results.added.length > 0 ? 'success' : 'warning');
+      
+      // Reset form if everything was successful
+      if (results.notFound.length === 0 && results.alreadyInTournament.length === 0) {
+        setTimeout(() => {
+          document.getElementById('quickAddModal').style.display = 'none';
+          document.getElementById('quickAddForm').reset();
+          statusEl.className = 'status-message';
+          statusEl.textContent = '';
+        }, 2000);
+      }
+      
+    } catch (error) {
+      console.error('Error adding players:', error);
+      this.showStatus(statusEl, 'Error adding players. Please try again.', 'error');
+    }
+  }
+  
+  showStatus(element, message, type) {
+    element.textContent = message;
+    element.className = `status-message status-${type}`;
+  }
 
   formatDate(dateValue) {
     if (!dateValue) return 'N/A';
@@ -161,6 +304,7 @@ class TournamentManager {
     } catch (e) {
       return dateValue;
     }
+    
   }
 
 restoreCourtAssignmentsFromBracket(bracketData) {
@@ -556,9 +700,31 @@ async loadPlayers() {
   initializeControls() {
     const setFirstRoundBtn = document.getElementById('setFirstRound');
     const resetBtn = document.getElementById('resetAssignments');
+    const autoAssignBtn = document.getElementById('autoAssignPlayers');
 
     setFirstRoundBtn.addEventListener('click', () => this.createFirstRound());
     resetBtn.addEventListener('click', () => this.resetAssignments());
+    if (autoAssignBtn) {
+      autoAssignBtn.addEventListener('click', () => {
+        Swal.fire({
+          title: 'Auto Assign Players',
+          text: 'This will assign all players to courts based on their ratings. Continue?',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, assign them',
+          cancelButtonText: 'Cancel'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            this.autoAssignTopPlayers();
+            Swal.fire(
+              'Players Assigned!',
+              'Players have been automatically assigned to courts based on ratings',
+              'success'
+            );
+          }
+        });
+      });
+    }
   }
 
   async createFirstRound() {

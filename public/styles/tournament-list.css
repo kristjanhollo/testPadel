@@ -118,6 +118,10 @@ body {
     background: #f1f5f9;
     color: #475569;
 }
+.fully-booked {
+    color: #e53e3e;
+    font-weight: bold;
+  }
 
 /* Tournament Info */
 .tournament-info {

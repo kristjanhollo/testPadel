@@ -81,9 +81,15 @@ class TournamentList {
   }
 
   createTournamentCard(tournament) {
+    console.log(`Tournament "${tournament.name}" data:`, {
+        participants: tournament.participants,
+        maxParticipants: tournament.maxParticipants,
+        participants_type: typeof tournament.participants,
+        status: tournament.status_id
+    });
+    
     const card = document.createElement('div');
     card.className = 'tournament-card';
-
     let date = 'N/A';
     try {
       // Parse date from string or Firestore timestamp
@@ -106,10 +112,35 @@ class TournamentList {
       console.warn('Error formatting date:', error);
       date = tournament.start_date || 'N/A';
     }
-
     const status = this.getTournamentStatus(tournament);
     const courtCount = Array.isArray(tournament.courts) ? tournament.courts.length : 0;
-
+    
+    // Calculate player count information
+    const registeredPlayers = tournament.participants || 0;
+    
+    // Määra maxPlayers väärtus, arvestades võimalust, et maxParticipants võib olla undefined
+    let maxPlayers = tournament.maxParticipants;
+    
+    // Täiendusloogika - näita olekut õigesti baseerudes tegelikel andmetel
+    let playersText;
+    let playersClass = '';
+    
+    if (typeof maxPlayers === 'undefined') {
+      // Kui maxParticipants on undefined, näita lihtsalt mängijate arvu
+      playersText = String(registeredPlayers);
+    } else {
+      // Kui maksimum on teada, siis kontrolli, kas turniir on täis
+      maxPlayers = Number(maxPlayers) || 16; // Kasuta vaikimisi 16, kui ei saa numbriks teisendada
+      const isFullyBooked = maxPlayers > 0 && 
+                           registeredPlayers > 0 && 
+                           registeredPlayers >= maxPlayers;
+                           
+      playersText = isFullyBooked ? 'FULL' : `${registeredPlayers}/${maxPlayers}`;
+      if (isFullyBooked) {
+        playersClass = 'fully-booked';
+      }
+    }
+    
     card.innerHTML = `
       <span class="tournament-status status-${status}">
         ${status.charAt(0).toUpperCase() + status.slice(1)}
@@ -120,7 +151,7 @@ class TournamentList {
       <div class="tournament-info">🎮 ${tournament.format}</div>
       <div class="tournament-stats">
         <div class="stat-item">
-          <span>${tournament.participants || 0}</span>
+          <span class="${playersClass}">${playersText}</span>
           <span>Players</span>
         </div>
         <div class="stat-item">
