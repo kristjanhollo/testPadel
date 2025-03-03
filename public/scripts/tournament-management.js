@@ -617,21 +617,15 @@ async loadPlayers() {
         }
       });
     } else {
-      // For Mexicano format, assign players by rating but also set group property
+      // For non-Americano formats, use the original logic
       const topPlayers = [...this.tournamentPlayers]
         .sort((a, b) => b.ranking - a.ranking)
         .slice(0, 16);
-  
-      // Group colors for Mexicano format
-      const groupColors = ['green', 'blue', 'yellow', 'pink'];
-  
+
       topPlayers.forEach((player, index) => {
         const courtIndex = Math.floor(index / 4);
         const team = index % 4 === 0 || index % 4 === 3 ? 1 : 2;
         const position = index % 2 === 0 ? 1 : 2;
-        
-        // Set the group color based on court index
-        player.group = groupColors[courtIndex];
         
         this.assignPlayerToSlot(player, `court-${courtIndex + 1}`, team, position);
       });
