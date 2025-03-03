@@ -9,6 +9,7 @@ import {
   ConflictUtils,
   GameScoreUtils,
 } from './utils.js';
+import playerProfileService from './services/player-profile-service';
 
 /**
  * Tournament Bracket Mexicano class
@@ -50,7 +51,82 @@ class TournamentBracketMexicano {
     this.init();
   }
   
+  async recordMatchResultForPlayers(match) {
+    if (!match || !match.completed) return;
+    
+    try {
+      // Get player profile service
+      const playerProfileService = window.playerProfileService;
+      if (!playerProfileService) {
+        console.warn('Player profile service not available, match results not recorded');
+        return;
+      }
+      
+      // Determine winner and loser teams
+      const team1Won = match.score1 > match.score2;
+      const winningTeam = team1Won ? match.team1 : match.team2;
+      const losingTeam = team1Won ? match.team2 : match.team1;
+      
+      // Format the match data for saving
+      const matchData = {
+        date: new Date().toISOString(),
+        tournament: this.tournament?.name || 'Tournament',
+        tournamentId: this.selectedTournamentId,
+        round: match.round,
+        courtName: match.courtName || match.court,
+        score1: match.score1,
+        score2: match.score2,
+        points: team1Won ? match.score1 : match.score2 // Points are the score they got
+      };
+      
+      // Record match for winning team players
+      for (const player of winningTeam) {
+        if (!player || !player.id) continue;
+        
+        // Create opponent names string from losing team
+        const opponents = losingTeam.map(p => p.name).join(' & ');
+        
+        // Create player-specific match record
+        const playerMatchData = {
+          ...matchData,
+          won: true,
+          result: 'win',
+          opponent: opponents,
+          vs: losingTeam.map(p => ({ id: p.id, name: p.name })) // Store opponent details
+        };
+        
+        // Save match to player profile
+        await playerProfileService.addMatchToPlayer(player.id, playerMatchData);
+        console.log(`Recorded win for player ${player.name}`);
+      }
+      
+      // Record match for losing team players
+      for (const player of losingTeam) {
+        if (!player || !player.id) continue;
+        
+        // Create opponent names string from winning team
+        const opponents = winningTeam.map(p => p.name).join(' & ');
+        
+        // Create player-specific match record
+        const playerMatchData = {
+          ...matchData,
+          won: false,
+          result: 'loss',
+          opponent: opponents,
+          vs: winningTeam.map(p => ({ id: p.id, name: p.name })) // Store opponent details
+        };
+        
+        // Save match to player profile
+        await playerProfileService.addMatchToPlayer(player.id, playerMatchData);
+        console.log(`Recorded loss for player ${player.name}`);
+      }
+    } catch (error) {
+      console.error('Error recording match results for players:', error);
+    }
+  }
+
   async init() {
+    window.playerProfileService = playerProfileService;
     if (!firebaseService) {
       console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
       return;
@@ -65,6 +141,7 @@ class TournamentBracketMexicano {
           Swal.showLoading();
         }
       });
+      
       
       // Set up listeners for data changes
       this.setupDataListeners();
@@ -963,7 +1040,16 @@ findNextScoreElement(currentElement, currentMatchId, currentScoreType) {
       if (matchUpdated) {
         this.recalculateStandings(updatedBracketData);
       }
-      
+      // Record match results for player profiles if the match is complete
+if (foundMatch.completed) {
+  await this.recordMatchResultForPlayers(foundMatch);
+}
+
+if (match.score1 !== null && match.score2 !== null) {
+  match.completed = true;
+  await this.recordMatchResultForPlayers(match);
+}
+
       // Save updated bracket data
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
@@ -1250,6 +1336,88 @@ findNextScoreElement(currentElement, currentMatchId, currentScoreType) {
     }
   }
 
+  async recordTournamentResultsForPlayers() {
+    if (!this.bracketData || !this.bracketData.standings) return;
+    
+    try {
+      // Get player profile service
+      const playerProfileService = window.playerProfileService;
+      if (!playerProfileService) {
+        console.warn('Player profile service not available, tournament results not recorded');
+        return;
+      }
+      
+      // Calculate total players
+      const totalPlayers = this.bracketData.standings.length;
+      
+      // Format the tournament data
+      const tournamentData = {
+        id: this.selectedTournamentId,
+        name: this.tournament?.name || 'Tournament',
+        date: new Date().toISOString(),
+        format: this.tournament?.format,
+        totalPlayers: totalPlayers
+      };
+      
+      // Record tournament results for each player
+      for (const standing of this.bracketData.standings) {
+        // Skip if no valid player data
+        if (!standing || !standing.id) continue;
+        
+        // Get all matches for this player
+        const playerMatches = this.bracketData.completedMatches.filter(match => 
+          match.team1.some(p => p.id === standing.id) || 
+          match.team2.some(p => p.id === standing.id)
+        );
+        
+        // Calculate games won/lost
+        let gamesWon = 0;
+        let gamesLost = 0;
+        
+        playerMatches.forEach(match => {
+          const inTeam1 = match.team1.some(p => p.id === standing.id);
+          if (inTeam1) {
+            gamesWon += match.score1 || 0;
+            gamesLost += match.score2 || 0;
+          } else {
+            gamesWon += match.score2 || 0;
+            gamesLost += match.score1 || 0;
+          }
+        });
+        
+        // Create player-specific tournament record
+        const playerTournamentData = {
+          ...tournamentData,
+          position: standing.finalRank || this.bracketData.standings.findIndex(s => s.id === standing.id) + 1,
+          points: standing.points || 0,
+          gamesWon: gamesWon,
+          gamesLost: gamesLost,
+          wins: standing.wins || 0,
+          losses: standing.losses || 0,
+          group: this.getPlayerGroup(standing.id)
+        };
+        
+        // Save tournament to player profile
+        await playerProfileService.addTournamentToPlayer(standing.id, playerTournamentData);
+        console.log(`Recorded tournament results for player ${standing.name}`);
+        
+        // Update player rating if needed
+        if (standing.rating !== undefined) {
+          await playerProfileService.addRatingHistoryEntry(standing.id, standing.rating);
+        }
+        
+        // Update player group history if needed
+        const group = this.getPlayerGroup(standing.id);
+        if (group) {
+          await playerProfileService.addGroupHistoryEntry(standing.id, group);
+        }
+      }
+    } catch (error) {
+      console.error('Error recording tournament results for players:', error);
+      // Don't throw - we don't want to stop the tournament flow if profile updates fail
+    }
+  }
+
   async endTournament() {
     const result = await Swal.fire({
       title: 'Are you sure?',
@@ -1299,6 +1467,7 @@ findNextScoreElement(currentElement, currentMatchId, currentScoreType) {
         this.selectedTournamentId,
         updatedBracketData
       );
+      await this.recordTournamentResultsForPlayers();
       
       Swal.close();
       
@@ -1324,6 +1493,40 @@ findNextScoreElement(currentElement, currentMatchId, currentScoreType) {
         icon: 'error'
       });
     }
+  }
+  getPlayerGroup(playerId) {
+    // Find player in the players list
+    const player = this.players.find(p => p.id === playerId);
+    if (player && player.group) {
+      return player.group;
+    }
+    
+    // If no group found in player object, try to determine from bracket data
+    if (this.bracketData.format === 'Americano' && this.bracketData.rounds && this.bracketData.rounds.length > 0) {
+      // Get the first match in round 1 that includes this player
+      const round1 = this.bracketData.rounds[0];
+      for (const match of round1.matches) {
+        if (match.team1.some(p => p.id === playerId) || match.team2.some(p => p.id === playerId)) {
+          return match.groupColor;
+        }
+      }
+    } else if (this.bracketData.courts) {
+      // For Mexicano format, check which court the player started on
+      for (let i = 0; i < this.bracketData.courts.length; i++) {
+        const court = this.bracketData.courts[i];
+        if (court.matches && court.matches.length > 0) {
+          const match = court.matches[0]; // First match on this court
+          if (match.team1.some(p => p.id === playerId) || match.team2.some(p => p.id === playerId)) {
+            // Convert court index to group color
+            const groupColors = ['green', 'blue', 'yellow', 'pink'];
+            return groupColors[i] || 'hot';
+          }
+        }
+      }
+    }
+    
+    // Default group if nothing found
+    return 'hot';
   }
 
   async resetCurrentRound() {

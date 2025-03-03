@@ -513,6 +513,292 @@ class FirebaseService {
     return serverTimestamp();
   }
   
+/**
+ * Add a match to a player's match history
+ * @param {string} playerId - The player's ID
+ * @param {Object} matchData - Match data to add
+ * @returns {Promise<string>} ID of the new match document
+ */
+async addMatchToPlayer(playerId, matchData) {
+  try {
+    // Reference to player's matches subcollection
+    const matchesRef = collection(db, this.collections.PLAYERS, playerId, 'matches');
+    
+    // Add the match
+    const docRef = await addDoc(matchesRef, {
+      ...matchData,
+      date: matchData.date || new Date().toISOString(),
+      created_at: serverTimestamp()
+    });
+    
+    // Update player's stats
+    await this.updatePlayerStats(playerId, {
+      matchesCount: 1,
+      winsCount: matchData.won ? 1 : 0,
+      lossesCount: matchData.won ? 0 : 1
+    });
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('Error adding match to player:', error);
+    throw error;
+  }
+}
+
+/**
+ * Add a tournament to a player's tournament history
+ * @param {string} playerId - The player's ID
+ * @param {Object} tournamentData - Tournament data to add
+ * @returns {Promise<string>} ID of the new tournament document
+ */
+async addTournamentToPlayer(playerId, tournamentData) {
+  try {
+    // Reference to player's tournaments subcollection
+    const tournamentsRef = collection(db, this.collections.PLAYERS, playerId, 'tournaments');
+    
+    // Add the tournament
+    const docRef = await addDoc(tournamentsRef, {
+      ...tournamentData,
+      date: tournamentData.date || new Date().toISOString(),
+      created_at: serverTimestamp()
+    });
+    
+    // Update player's stats
+    await this.updatePlayerStats(playerId, {
+      tournamentsCount: 1
+    });
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('Error adding tournament to player:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update player's statistics
+ * @param {string} playerId - The player's ID
+ * @param {Object} statsUpdate - Stats to update
+ * @returns {Promise<void>}
+ */
+async updatePlayerStats(playerId, statsUpdate) {
+  try {
+    const playerRef = doc(db, this.collections.PLAYERS, playerId);
+    const playerDoc = await getDoc(playerRef);
+    
+    if (!playerDoc.exists()) {
+      throw new Error('Player not found');
+    }
+    
+    const playerData = playerDoc.data();
+    const stats = playerData.stats || {
+      matchesCount: 0,
+      winsCount: 0,
+      lossesCount: 0,
+      tournamentsCount: 0,
+      winRate: 0
+    };
+    
+    // Update counts
+    if (statsUpdate.matchesCount) stats.matchesCount += statsUpdate.matchesCount;
+    if (statsUpdate.winsCount) stats.winsCount += statsUpdate.winsCount;
+    if (statsUpdate.lossesCount) stats.lossesCount += statsUpdate.lossesCount;
+    if (statsUpdate.tournamentsCount) stats.tournamentsCount += statsUpdate.tournamentsCount;
+    
+    // Calculate win rate
+    if (stats.matchesCount > 0) {
+      stats.winRate = (stats.winsCount / stats.matchesCount) * 100;
+    }
+    
+    // Update player document
+    await updateDoc(playerRef, { 
+      stats: stats,
+      lastUpdated: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating player stats:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get matches for a player
+ * @param {string} playerId - The player's ID
+ * @param {number} limit - Maximum number of matches to retrieve
+ * @returns {Promise<Array>} List of match objects
+ */
+async getPlayerMatches(playerId, limit = 15) {
+  try {
+    const matchesRef = collection(db, this.collections.PLAYERS, playerId, 'matches');
+    const matchesQuery = query(
+      matchesRef,
+      orderBy('date', 'desc'),
+      limit(limit)
+    );
+    
+    const snapshot = await getDocs(matchesQuery);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error getting player matches:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get tournaments for a player
+ * @param {string} playerId - The player's ID
+ * @param {number} limit - Maximum number of tournaments to retrieve
+ * @returns {Promise<Array>} List of tournament objects
+ */
+async getPlayerTournaments(playerId, limit = 10) {
+  try {
+    const tournamentsRef = collection(db, this.collections.PLAYERS, playerId, 'tournaments');
+    const tournamentsQuery = query(
+      tournamentsRef,
+      orderBy('date', 'desc'),
+      limit(limit)
+    );
+    
+    const snapshot = await getDocs(tournamentsQuery);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error getting player tournaments:', error);
+    throw error;
+  }
+}
+
+/**
+ * Add a rating entry to a player's rating history
+ * @param {string} playerId - The player's ID
+ * @param {number} rating - The new rating
+ * @returns {Promise<void>}
+ */
+async addPlayerRatingEntry(playerId, rating) {
+  try {
+    const playerRef = doc(db, this.collections.PLAYERS, playerId);
+    const playerDoc = await getDoc(playerRef);
+    
+    if (!playerDoc.exists()) {
+      throw new Error('Player not found');
+    }
+    
+    const playerData = playerDoc.data();
+    const ratingHistory = playerData.ratingHistory || [];
+    
+    // Add new rating entry
+    ratingHistory.push({
+      date: new Date().toISOString(),
+      rating: rating
+    });
+    
+    // Update player document
+    await updateDoc(playerRef, { 
+      ratingHistory: ratingHistory,
+      ranking: rating, // Also update the current rating
+      lastUpdated: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error adding player rating entry:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get a player's group history
+ * @param {string} playerId - The player's ID
+ * @returns {Promise<Array>} The player's group history
+ */
+async getPlayerGroupHistory(playerId) {
+  try {
+    const playerRef = doc(db, this.collections.PLAYERS, playerId);
+    const playerDoc = await getDoc(playerRef);
+    
+    if (!playerDoc.exists()) {
+      throw new Error('Player not found');
+    }
+    
+    return playerDoc.data().groupHistory || [];
+  } catch (error) {
+    console.error('Error getting player group history:', error);
+    throw error;
+  }
+}
+
+/**
+ * Add a group entry to a player's group history
+ * @param {string} playerId - The player's ID
+ * @param {string} group - The new group
+ * @returns {Promise<void>}
+ */
+async addPlayerGroupEntry(playerId, group) {
+  try {
+    const playerRef = doc(db, this.collections.PLAYERS, playerId);
+    const playerDoc = await getDoc(playerRef);
+    
+    if (!playerDoc.exists()) {
+      throw new Error('Player not found');
+    }
+    
+    const playerData = playerDoc.data();
+    const groupHistory = playerData.groupHistory || [];
+    
+    // Check if we already have this as the latest group
+    if (groupHistory.length > 0) {
+      const lastEntry = groupHistory[groupHistory.length - 1];
+      if (lastEntry.group === group) {
+        // Already the current group, no need to add
+        return;
+      }
+    }
+    
+    // Add new group entry
+    groupHistory.push({
+      date: new Date().toISOString(),
+      group: group
+    });
+    
+    // Update player document
+    await updateDoc(playerRef, { 
+      groupHistory: groupHistory,
+      group: group, // Also update the current group
+      lastUpdated: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error adding player group entry:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get a player's ranking among all players
+ * @param {string} playerId - The player's ID
+ * @returns {Promise<number>} The player's ranking position (1-based)
+ */
+async getPlayerRanking(playerId) {
+  try {
+    const playersRef = collection(db, this.collections.PLAYERS);
+    const playersQuery = query(playersRef, orderBy('ranking', 'desc'));
+    const snapshot = await getDocs(playersQuery);
+    
+    const players = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    const playerIndex = players.findIndex(p => p.id === playerId);
+    return playerIndex !== -1 ? playerIndex + 1 : null;
+  } catch (error) {
+    console.error('Error getting player ranking:', error);
+    throw error;
+  }
+}
+
   /**
    * Format a Firestore timestamp
    * @param {Timestamp} firestoreTimestamp - Firestore timestamp
