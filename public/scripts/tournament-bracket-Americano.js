@@ -1,36 +1,7 @@
-
+import {routingService } from './services/routing-service';
 import firebaseService from './services/firebase-service';
 import playerProfileService from './services/player-profile-service';
 
-// Check if SweetAlert is available globally, otherwise use basic alerts
-const Swal = window.Swal || {
-  fire: (options) => {
-    if (options.icon === 'error' || options.icon === 'warning') {
-      alert(options.title + '\n' + (options.text || ''));
-      return Promise.reject();
-    } else if (options.title && options.text) {
-      alert(options.title + '\n' + options.text);
-    } else {
-      alert(options.title || options.text);
-    }
-    
-    // Mock SweetAlert's returned Promise API
-    return {
-      then: (callback) => {
-        if (options.showCancelButton) {
-          if (confirm('Confirm this action?')) {
-            callback({ isConfirmed: true });
-          }
-        } else {
-          callback({ isConfirmed: true });
-        }
-        return { catch: () => {} };
-      }
-    };
-  },
-  close: () => {},
-  showLoading: () => {}
-};
 
 /**
  * Tournament Bracket Americano class
@@ -192,9 +163,23 @@ class TournamentBracketAmericano {
       if (!this.bracketData) {
         await this.initializeBracket();
       } else {
-        this.currentRound = this.bracketData.currentRound || 1;
+        // Check URL and localStorage for round information
+        const urlParams = new URLSearchParams(window.location.search);
+        const roundParam = urlParams.get('round');
+        const storedRound = localStorage.getItem('currentRound');
         
-        // Check if players have groupOrder property - this indicates groups were manually arranged
+        if (roundParam && !isNaN(parseInt(roundParam))) {
+          this.currentRound = parseInt(roundParam);
+        } else if (storedRound && !isNaN(parseInt(storedRound))) {
+          this.currentRound = parseInt(storedRound);
+        } else {
+          this.currentRound = this.bracketData.currentRound || 1;
+        }
+        
+        // Delete stored round to avoid persistence issues
+        localStorage.removeItem('currentRound');
+        
+        // Create rounds if needed
         const hasGroupOrder = this.players.some(p => typeof p.groupOrder === 'number');
         
         // Always recreate rounds if players have groupOrder (user has manually arranged groups)
@@ -216,7 +201,7 @@ class TournamentBracketAmericano {
         if (needToCreateRounds) {
           console.log('Recreating rounds based on current player groups');
           
-          // Tühjenda olemasolevad mängud
+          // Clear existing matches
           if (this.bracketData.rounds) {
             this.bracketData.rounds.forEach(round => round.matches = []);
           } else {
@@ -257,6 +242,30 @@ class TournamentBracketAmericano {
       // Set up event listeners
       this.setupEventListeners();
       
+      // Use routing service to handle state restoration
+      routingService.handleBracketPageLoad({
+        onRoundLoad: (round) => {
+          if (round && round > 0 && round <= 4) {
+            this.currentRound = round;
+            
+            // Update render state to show the correct round
+            this.renderAllRounds();
+            
+            // Update tab selection if we have tabs
+            const roundTabs = document.getElementById('roundTabs');
+            if (roundTabs) {
+              const tabs = roundTabs.querySelectorAll('.round-tab');
+              tabs.forEach(tab => {
+                tab.classList.remove('active');
+                if (parseInt(tab.dataset.round) === round) {
+                  tab.classList.add('active');
+                }
+              });
+            }
+          }
+        }
+      });
+      
       console.log('Tournament bracket initialized successfully');
     } catch (error) {
       try { Swal.close(); } catch (e) {}
@@ -277,6 +286,31 @@ class TournamentBracketAmericano {
         window.location.href = 'tournament-list.html';
       }
     }
+  }
+  
+  // Add a method to handle round selection with state persistence
+  handleRoundTabClick(roundNumber) {
+    // Update round state
+    this.currentRound = roundNumber;
+    
+    // Store current round in localStorage for state persistence
+    localStorage.setItem('currentRound', roundNumber);
+    
+    // Update URL without page refresh
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('round', roundNumber);
+    window.history.pushState({}, '', newUrl);
+    
+    // Update UI
+    document.querySelectorAll('.round-tab').forEach(tab => {
+      tab.classList.remove('active');
+      if (parseInt(tab.dataset.round) === roundNumber) {
+        tab.classList.add('active');
+      }
+    });
+    
+    // Render the selected round
+    this.renderRound(roundNumber);
   }
   
   setupDataListeners() {

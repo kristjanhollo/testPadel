@@ -16,7 +16,7 @@ const htmlPages = [
   { name: 'tournament-create', chunk: 'tournament-create' },
   { name: 'tournament-list', chunk: 'tournament-list' },
   { name: 'tournament-management', chunk: 'tournament-management' },
-  { name: 'tournament-stats', chunk: 'tournament-stats' } // Add tournament stats page
+  { name: 'tournament-stats', chunk: 'tournament-stats' }
 ];
 
 // Generate HtmlWebpackPlugin instances for each page
@@ -24,7 +24,7 @@ const multipleHtmlPlugins = htmlPages.map(({ name, chunk }) => {
   return new HtmlWebpackPlugin({
     template: `./public/${name}.html`,
     filename: `${name}.html`,
-    chunks: ['vendors', 'common', chunk],
+    chunks: [chunk, 'shared_vendors', 'shared_common'],
     minify: {
       collapseWhitespace: true,
       removeComments: true,
@@ -41,16 +41,6 @@ module.exports = (env, argv) => {
   
   return {
     entry: {
-      // Vendor bundle with shared dependencies
-      vendors: [
-        'firebase/app',
-        'firebase/firestore',
-        'sweetalert2'
-      ],
-      
-      // Common utilities
-      common: './public/scripts/firebase-init.js',
-      
       // Page-specific entry points - each corresponds to an HTML page
       'index': './public/scripts/main.js',
       'player-management': './public/scripts/player-management.js',
@@ -61,7 +51,8 @@ module.exports = (env, argv) => {
       'tournament-create': './public/scripts/tournament-create.js',
       'tournament-list': './public/scripts/tournament-list.js',
       'tournament-management': './public/scripts/tournament-management.js',
-      'tournament-stats': './public/scripts/tournament-stats.js', // Add tournament stats entry
+      'tournament-stats': './public/scripts/tournament-stats.js',
+      '404': './public/scripts/handle-404.js',
     },
     
     output: {
@@ -73,7 +64,6 @@ module.exports = (env, argv) => {
     resolve: {
       extensions: ['.js', '.json'],
       alias: {
-        // Add aliases for easier imports
         '@': path.resolve(__dirname, 'public'),
         '@services': path.resolve(__dirname, 'public/scripts/services'),
         '@utils': path.resolve(__dirname, 'public/scripts/utils'),
@@ -119,12 +109,6 @@ module.exports = (env, argv) => {
           // Static files
           { from: 'public/styles', to: 'styles' },
           { from: 'public/404.html', to: '404.html' },
-          
-          // Images, if you have any
-          // { from: 'public/images', to: 'images' },
-          
-          // Any other static files
-          // { from: 'public/favicon.ico', to: 'favicon.ico' },
         ]
       }),
       
@@ -145,6 +129,29 @@ module.exports = (env, argv) => {
         }),
       ],
       
+      // Split chunks for better caching and code organization
+      splitChunks: {
+        chunks: 'all',
+        cacheGroups: {
+          shared_vendors: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'shared_vendors',
+            chunks: 'all',
+            priority: 10
+          },
+          shared_common: {
+            test: module => {
+              // Include services directory as common code
+              return /[\\/]services[\\/]/.test(module.resource) ||
+                module.resource === path.resolve(__dirname, 'public/scripts/firebase-init.js');
+            },
+            name: 'shared_common',
+            chunks: 'all',
+            minChunks: 2,
+            priority: 5
+          }
+        }
+      }
     },
     
     devtool: isProduction ? 'source-map' : 'inline-source-map',

@@ -1,6 +1,5 @@
-// Import dependencies and styles
-import '../styles/tournament-management.css';
 import firebaseService from './services/firebase-service';
+import { routingService } from './services/routing-service.js';
 import IsTest from './main';
 
 // Tournament Manager class
@@ -723,55 +722,7 @@ async loadPlayers() {
     }
   }
 
-  async createFirstRound() {
-    try {
-        // Get and sort players by ranking for each group
-        const [greenGroupPlayers, blueGroupPlayers, yellowGroupPlayers, pinkGroupPlayers] = 
-            await Promise.all([
-                this.getGroupPlayers('green'),
-                this.getGroupPlayers('blue'),
-                this.getGroupPlayers('yellow'),
-                this.getGroupPlayers('pink')
-            ]);
-
-        // Sort players by ranking in each group
-        const sortByRanking = players => players.sort((a, b) => b.ranking - a.ranking);
-        
-        const sortedGroups = {
-            green: sortByRanking(greenGroupPlayers),
-            blue: sortByRanking(blueGroupPlayers),
-            yellow: sortByRanking(yellowGroupPlayers),
-            pink: sortByRanking(pinkGroupPlayers)
-        };
-
-        let matches = [];
-
-        if (this.tournamentData.format === 'Americano') {
-            // Create matches between groups (Green vs Blue, Yellow vs Pink)
-            matches = [
-                ...this.createMatchesBetweenGroups(sortedGroups.green, sortedGroups.blue),
-                ...this.createMatchesBetweenGroups(sortedGroups.yellow, sortedGroups.pink)
-            ];
-        } else {
-            // Create matches within each group for Mexicano format
-            matches = [
-                ...this.createMatchesWithinGroup(sortedGroups.green),
-                ...this.createMatchesWithinGroup(sortedGroups.blue),
-                ...this.createMatchesWithinGroup(sortedGroups.yellow),
-                ...this.createMatchesWithinGroup(sortedGroups.pink)
-            ];
-        }
-
-        // Save brackets to database
-        await this.saveBracket(matches, 1);
-        
-        return matches;
-
-    } catch (error) {
-        console.error('Error in createFirstRound:', error);
-        throw new Error(`Failed to create first round: ${error.message}`);
-    }
-}
+ 
 /**
  * Taastab mängijate gruppide info bracketi andmetest
  * @param {Object} bracketData - Bracketi andmed
@@ -890,30 +841,7 @@ createMatchesWithinGroup(group) {
     return matches;
 }
 
-  async updateTournamentDisplay() {
-    if (!this.tournamentData) return;
-    
-    // Check if tournament is completed
-    if (this.tournamentData.status_id === 3) { // 3 = completed
-      // Redirect to tournament stats page
-      Swal.fire({
-        title: 'Tournament Completed',
-        text: 'This tournament is already completed. Redirecting to results page.',
-        icon: 'info',
-        timer: 2000,
-        showConfirmButton: false
-      }).then(() => {
-        window.location.href = 'tournament-stats.html';
-      });
-      return;
-    }
-    
-    // If not completed, show tournament info as normal
-    document.getElementById('tournamentName').textContent = this.tournamentData.name;
-    document.getElementById('tournamentDate').textContent = `Date: ${this.formatDate(this.tournamentData.start_date)}`;
-    document.getElementById('tournamentLocation').textContent = `Location: ${this.tournamentData.location}`;
-    document.getElementById('tournamentFormat').textContent = `Format: ${this.tournamentData.format}`;
-  }
+  
 
   getCourtAssignmentsFromUI() {
     const assignments = {};
@@ -1525,11 +1453,7 @@ autoAssignPlayersToGroup(groupColor) {
       );
       
       Swal.close();
-
-      const bracketUrl = this.tournamentData.format.trim().toLowerCase() === 'americano' 
-      ? 'tournament-bracket-Americano.html' 
-      : 'tournament-bracket-M.html';
-      
+  
       // Ask if user wants to go directly to the bracket view
       const result = await Swal.fire({
         title: 'Groups Saved!',
@@ -1541,13 +1465,153 @@ autoAssignPlayersToGroup(groupColor) {
       });
       
       if (result.isConfirmed) {
-        window.location.href = bracketUrl;
+        // Use routing service instead of direct navigation
+        routingService.routeToTournament(this.selectedTournamentId, null, true);
       }
       
     } catch (error) {
       Swal.close();
       console.error('Error saving groups:', error);
       Swal.fire('Error', 'Failed to save group assignments. Please try again.', 'error');
+    }
+  }
+  
+  // Replace the createFirstRound method with this updated version
+  async createFirstRound() {
+    try {
+      // Show loading indicator
+      Swal.fire({
+        title: 'Creating tournament bracket...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+  
+      // Get and sort players by ranking for each group
+      const [greenGroupPlayers, blueGroupPlayers, yellowGroupPlayers, pinkGroupPlayers] = 
+          await Promise.all([
+              this.getGroupPlayers('green'),
+              this.getGroupPlayers('blue'),
+              this.getGroupPlayers('yellow'),
+              this.getGroupPlayers('pink')
+          ]);
+  
+      // Sort players by ranking in each group
+      const sortByRanking = players => players.sort((a, b) => b.ranking - a.ranking);
+      
+      const sortedGroups = {
+          green: sortByRanking(greenGroupPlayers),
+          blue: sortByRanking(blueGroupPlayers),
+          yellow: sortByRanking(yellowGroupPlayers),
+          pink: sortByRanking(pinkGroupPlayers)
+      };
+  
+      let matches = [];
+  
+      if (this.tournamentData.format === 'Americano') {
+          // Create matches between groups (Green vs Blue, Yellow vs Pink)
+          matches = [
+              ...this.createMatchesBetweenGroups(sortedGroups.green, sortedGroups.blue),
+              ...this.createMatchesBetweenGroups(sortedGroups.yellow, sortedGroups.pink)
+          ];
+      } else {
+          // Create matches within each group for Mexicano format
+          matches = [
+              ...this.createMatchesWithinGroup(sortedGroups.green),
+              ...this.createMatchesWithinGroup(sortedGroups.blue),
+              ...this.createMatchesWithinGroup(sortedGroups.yellow),
+              ...this.createMatchesWithinGroup(sortedGroups.pink)
+          ];
+      }
+  
+      // Save brackets to database
+      await this.saveBracket(matches, 1);
+      
+      // Set tournament status to ongoing (2)
+      await firebaseService.updateTournament(this.selectedTournamentId, {
+        status_id: 2
+      });
+      
+      Swal.close();
+      
+      // Ask user if they want to navigate to the tournament bracket
+      const result = await Swal.fire({
+        title: 'Tournament Created!',
+        text: 'The tournament has been created successfully. Do you want to go to the tournament bracket?',
+        icon: 'success',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, go to bracket',
+        cancelButtonText: 'No, stay here'
+      });
+      
+      if (result.isConfirmed) {
+        // Use routing service instead of direct navigation
+        console.log('Routing to tournament:', this.selectedTournamentId);
+        routingService.routeToTournament(this.selectedTournamentId, null, true);
+      }
+      
+      return matches;
+  
+    } catch (error) {
+      Swal.close();
+      console.error('Error in createFirstRound:', error);
+      Swal.fire('Error', `Failed to create first round: ${error.message}`, 'error');
+      throw error;
+    }
+  }
+  
+  // Add this new method to the TournamentManager class to update the tournament display
+  async updateTournamentDisplay() {
+    if (!this.tournamentData) return;
+    
+    // Check if tournament is completed
+    if (this.tournamentData.status_id === 3) { // 3 = completed
+      // Redirect to tournament stats page using routing service
+      routingService.routeToTournament(this.selectedTournamentId);
+      return;
+    }
+    
+    // Check if tournament is ongoing and not just viewing management
+    if (this.tournamentData.status_id === 2) { // 2 = ongoing
+      // Add a button to go to the tournament bracket
+      const header = document.querySelector('.tournament-info');
+      if (header && !document.getElementById('viewBracketBtn')) {
+        const viewBracketBtn = document.createElement('button');
+        viewBracketBtn.id = 'viewBracketBtn';
+        viewBracketBtn.className = 'btn-primary';
+        viewBracketBtn.style.marginTop = '15px';
+        viewBracketBtn.textContent = 'View Tournament Bracket';
+        viewBracketBtn.addEventListener('click', () => {
+          routingService.routeToTournament(this.selectedTournamentId);
+        });
+        
+        header.appendChild(viewBracketBtn);
+      }
+    }
+    
+    // If not completed, show tournament info as normal
+    document.getElementById('tournamentName').textContent = this.tournamentData.name;
+    document.getElementById('tournamentDate').textContent = `Date: ${this.formatDate(this.tournamentData.start_date)}`;
+    document.getElementById('tournamentLocation').textContent = `Location: ${this.tournamentData.location}`;
+    document.getElementById('tournamentFormat').textContent = `Format: ${this.tournamentData.format}`;
+    
+    // Add tournament status
+    const statusMap = {
+      1: 'Upcoming',
+      2: 'Ongoing',
+      3: 'Completed'
+    };
+    
+    const statusElement = document.getElementById('tournamentStatus');
+    if (statusElement) {
+      statusElement.textContent = `Status: ${statusMap[this.tournamentData.status_id] || 'Unknown'}`;
+    } else if (document.getElementById('tournamentFormat')) {
+      // Create status element if it doesn't exist
+      const statusEl = document.createElement('p');
+      statusEl.id = 'tournamentStatus';
+      statusEl.textContent = `Status: ${statusMap[this.tournamentData.status_id] || 'Unknown'}`;
+      document.getElementById('tournamentFormat').parentNode.appendChild(statusEl);
     }
   }
   
@@ -1566,6 +1630,535 @@ autoAssignPlayersToGroup(groupColor) {
       }
     });
   }
+
+  /**
+ * Saves bracket data to Firebase based on tournament format
+ * @param {Array} matches - The matches to save
+ * @param {number} roundNumber - The round number (1-4)
+ * @returns {Promise<void>}
+ */
+async saveBracket(matches, roundNumber) {
+  try {
+    if (!this.tournamentData || !this.selectedTournamentId) {
+      throw new Error('Tournament data or ID is missing');
+    }
+
+    // Get tournament format
+    const isAmericano = this.tournamentData.format === 'Americano';
+    
+    if (isAmericano) {
+      // Handle Americano format
+      await this.saveAmericanoBracket(matches, roundNumber);
+    } else {
+      // Handle Mexicano format (default)
+      await this.saveMexicanoBracket(matches, roundNumber);
+    }
+  } catch (error) {
+    console.error('Error saving bracket:', error);
+    throw new Error(`Failed to save bracket: ${error.message}`);
+  }
+}
+
+/**
+ * Saves Americano format bracket data
+ * @param {Array} matches - The matches to save
+ * @param {number} roundNumber - The round number (1-4)
+ * @returns {Promise<void>}
+ */
+async saveAmericanoBracket(matches, roundNumber) {
+  try {
+    // Get existing bracket data or create new
+    let bracketData = await firebaseService.getTournamentBracketAmericano(this.selectedTournamentId);
+    
+    if (!bracketData) {
+      // Create initial bracket structure
+      bracketData = {
+        format: 'Americano',
+        currentRound: roundNumber,
+        rounds: [
+          { number: 1, completed: false, matches: [] },
+          { number: 2, completed: false, matches: [] },
+          { number: 3, completed: false, matches: [] },
+          { number: 4, completed: false, matches: [] }
+        ],
+        completedMatches: [],
+        standings: this.createInitialStandings()
+      };
+    }
+    
+    // Find the round to update
+    const roundData = bracketData.rounds.find(r => r.number === roundNumber);
+    if (!roundData) {
+      throw new Error(`Round ${roundNumber} not found in bracket data`);
+    }
+    
+    // Create matches for the round using group data
+    const roundMatches = [];
+    
+    // Get players by group
+    const groupedPlayers = {
+      green: this.getGroupPlayers('green'),
+      blue: this.getGroupPlayers('blue'),
+      yellow: this.getGroupPlayers('yellow'),
+      pink: this.getGroupPlayers('pink')
+    };
+    
+    // Sort each group by ranking
+    Object.keys(groupedPlayers).forEach(color => {
+      groupedPlayers[color].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    });
+    
+    // Create matches based on round number
+    if (roundNumber === 1) {
+      // Round 1: 1&4 vs 2&3 within each group
+      this.createAmericanoRound1Matches(roundMatches, groupedPlayers);
+    } else if (roundNumber === 2) {
+      // Round 2: 1&2 vs 3&4 within each group
+      this.createAmericanoRound2Matches(roundMatches, groupedPlayers);
+    } else if (roundNumber === 3) {
+      // Round 3: Mixed format with specific rules
+      this.createAmericanoRound3Matches(roundMatches, groupedPlayers);
+    } else if (roundNumber === 4) {
+      // Round 4: 1&3 vs 2&4 within each group
+      this.createAmericanoRound4Matches(roundMatches, groupedPlayers);
+    }
+    
+    // Update the round with new matches
+    roundData.matches = roundMatches;
+    bracketData.currentRound = roundNumber;
+    
+    // Save to Firebase
+    await firebaseService.saveTournamentBracketAmericano(this.selectedTournamentId, bracketData);
+    
+    console.log(`Americano bracket round ${roundNumber} saved successfully`);
+  } catch (error) {
+    console.error('Error saving Americano bracket:', error);
+    throw error;
+  }
+}
+
+/**
+ * Saves Mexicano format bracket data
+ * @param {Array} matches - The matches to save
+ * @param {number} roundNumber - The round number (1-4)
+ * @returns {Promise<void>}
+ */
+async saveMexicanoBracket(matches, roundNumber) {
+  try {
+    // Get existing bracket data or create new
+    let bracketData = await firebaseService.getTournamentBracket(this.selectedTournamentId);
+    
+    if (!bracketData) {
+      // Create initial bracket structure
+      bracketData = {
+        format: 'Mexicano',
+        currentRound: roundNumber,
+        courts: this.tournamentData.courts.map(courtName => ({
+          name: courtName,
+          matches: []
+        })),
+        completedMatches: [],
+        standings: this.createInitialStandings()
+      };
+    }
+    
+    // Get court assignments
+    const courtAssignments = this.getCourtAssignmentsFromGroups();
+    
+    // Create matches for each court
+    bracketData.courts.forEach((court, courtIndex) => {
+      // Clear existing matches
+      court.matches = [];
+      
+      // Get players for this court from groups
+      const courtName = court.name;
+      const courtColor = this.getColorForCourt(courtName);
+      const players = courtAssignments[courtColor] || [];
+      
+      // Need at least 4 players to create a match
+      if (players.length >= 4) {
+        // Create teams based on rating (1&4 vs 2&3)
+        const sortedPlayers = [...players].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+        
+        // Team 1: highest rated and lowest rated player
+        const team1 = [sortedPlayers[0], sortedPlayers[3]];
+        
+        // Team 2: second and third highest rated players
+        const team2 = [sortedPlayers[1], sortedPlayers[2]];
+        
+        // Create the match object
+        const match = {
+          id: `match-${Date.now()}-${courtIndex}`,
+          courtName: courtName,
+          team1: team1,
+          team2: team2,
+          score1: null,
+          score2: null,
+          completed: false,
+          round: roundNumber
+        };
+        
+        // Add the match to the court
+        court.matches.push(match);
+      }
+    });
+    
+    // Save to Firebase
+    await firebaseService.saveTournamentBracket(this.selectedTournamentId, bracketData);
+    
+    console.log(`Mexicano bracket round ${roundNumber} saved successfully`);
+  } catch (error) {
+    console.error('Error saving Mexicano bracket:', error);
+    throw error;
+  }
+}
+
+/**
+ * Creates initial standings for all players
+ * @returns {Array} Array of player standings
+ */
+createInitialStandings() {
+  return this.tournamentPlayers.map(player => ({
+    id: player.id,
+    name: player.name,
+    group: player.group || this.determinePlayerGroup(player),
+    points: 0,
+    gamesPlayed: 0,
+    wins: 0,
+    losses: 0
+  }));
+}
+
+/**
+ * Determines a player's group based on ranking if not already assigned
+ * @param {Object} player - The player object
+ * @returns {string} The group color (green, blue, yellow, pink)
+ */
+determinePlayerGroup(player) {
+  // If player already has a group, use that
+  if (player.group) {
+    return player.group;
+  }
+  
+  // Otherwise, determine based on ranking relative to others
+  const sortedPlayers = [...this.tournamentPlayers].sort((a, b) => 
+    (b.ranking || 0) - (a.ranking || 0)
+  );
+  
+  const playerIndex = sortedPlayers.findIndex(p => p.id === player.id);
+  const groupSize = Math.ceil(sortedPlayers.length / 4);
+  
+  if (playerIndex < groupSize) {
+    return 'green';
+  } else if (playerIndex < groupSize * 2) {
+    return 'blue';
+  } else if (playerIndex < groupSize * 3) {
+    return 'yellow';
+  } else {
+    return 'pink';
+  }
+}
+
+/**
+ * Gets color for a court name
+ * @param {string} courtName - The court name
+ * @returns {string} The corresponding color
+ */
+getColorForCourt(courtName) {
+  const colorMap = {
+    'Padel Arenas': 'green',
+    'Coolbet': 'blue',
+    'Lux Express': 'yellow',
+    '3p Logistics': 'pink'
+  };
+  
+  return colorMap[courtName] || 'green';
+}
+
+/**
+ * Gets court assignments from player groups
+ * @returns {Object} Map of group colors to player arrays
+ */
+getCourtAssignmentsFromGroups() {
+  return {
+    green: this.getGroupPlayers('green'),
+    blue: this.getGroupPlayers('blue'),
+    yellow: this.getGroupPlayers('yellow'),
+    pink: this.getGroupPlayers('pink')
+  };
+}
+
+/**
+ * Creates Round 1 Americano matches (1&4 vs 2&3 in each group)
+ * @param {Array} matches - The matches array to add to
+ * @param {Object} groupedPlayers - Players grouped by color
+ */
+createAmericanoRound1Matches(matches, groupedPlayers) {
+  ['green', 'blue', 'yellow', 'pink'].forEach((color, groupIndex) => {
+    const players = groupedPlayers[color];
+    const courtNames = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+    
+    // Skip if not enough players
+    if (players.length < 4) return;
+    
+    // Sort players by rating
+    const sortedPlayers = [...players].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    
+    // Team 1: Players 1 & 4
+    const team1 = [sortedPlayers[0], sortedPlayers[3]];
+    
+    // Team 2: Players 2 & 3
+    const team2 = [sortedPlayers[1], sortedPlayers[2]];
+    
+    // Create match
+    matches.push({
+      id: `match-${Date.now()}-${groupIndex}-r1`,
+      court: courtNames[groupIndex],
+      team1: team1,
+      team2: team2,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: 1,
+      groupColor: color
+    });
+    
+    // If we have 8 players in a group, create a second match
+    if (players.length >= 8) {
+      // Team 3: Players 5 & 8
+      const team3 = [sortedPlayers[4], sortedPlayers[7]];
+      
+      // Team 4: Players 6 & 7
+      const team4 = [sortedPlayers[5], sortedPlayers[6]];
+      
+      // Create second match
+      matches.push({
+        id: `match-${Date.now()}-${groupIndex}-r1-b`,
+        court: courtNames[groupIndex],
+        team1: team3,
+        team2: team4,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 1,
+        groupColor: color
+      });
+    }
+  });
+}
+
+/**
+ * Creates Round 2 Americano matches (1&2 vs 3&4 in each group)
+ * @param {Array} matches - The matches array to add to
+ * @param {Object} groupedPlayers - Players grouped by color
+ */
+createAmericanoRound2Matches(matches, groupedPlayers) {
+  ['green', 'blue', 'yellow', 'pink'].forEach((color, groupIndex) => {
+    const players = groupedPlayers[color];
+    const courtNames = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+    
+    // Skip if not enough players
+    if (players.length < 4) return;
+    
+    // Sort players by rating
+    const sortedPlayers = [...players].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    
+    // Team 1: Players 1 & 2
+    const team1 = [sortedPlayers[0], sortedPlayers[1]];
+    
+    // Team 2: Players 3 & 4
+    const team2 = [sortedPlayers[2], sortedPlayers[3]];
+    
+    // Create match
+    matches.push({
+      id: `match-${Date.now()}-${groupIndex}-r2`,
+      court: courtNames[groupIndex],
+      team1: team1,
+      team2: team2,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: 2,
+      groupColor: color
+    });
+    
+    // If we have 8 players in a group, create a second match
+    if (players.length >= 8) {
+      // Team 3: Players 5 & 6
+      const team3 = [sortedPlayers[4], sortedPlayers[5]];
+      
+      // Team 4: Players 7 & 8
+      const team4 = [sortedPlayers[6], sortedPlayers[7]];
+      
+      // Create second match
+      matches.push({
+        id: `match-${Date.now()}-${groupIndex}-r2-b`,
+        court: courtNames[groupIndex],
+        team1: team3,
+        team2: team4,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 2,
+        groupColor: color
+      });
+    }
+  });
+}
+
+/**
+ * Creates Round 3 Americano matches (Mix round: Green+Blue and Yellow+Pink)
+ * @param {Array} matches - The matches array to add to
+ * @param {Object} groupedPlayers - Players grouped by color
+ */
+createAmericanoRound3Matches(matches, groupedPlayers) {
+  // Mix 1: Green + Blue
+  if (groupedPlayers.green.length >= 2 && groupedPlayers.blue.length >= 2) {
+    // Sort players by rating
+    const greenSorted = [...groupedPlayers.green].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    const blueSorted = [...groupedPlayers.blue].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    
+    // Green 1 & Blue 2 vs Green 2 & Blue 1
+    const team1 = [greenSorted[0], blueSorted[1]];
+    const team2 = [greenSorted[1], blueSorted[0]];
+    
+    // Create match
+    matches.push({
+      id: `match-${Date.now()}-mix1-r3`,
+      court: 'Mix Round',
+      team1: team1,
+      team2: team2,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: 3,
+      groupColor: 'mix'
+    });
+    
+    // If we have enough players, create a second match
+    if (greenSorted.length >= 4 && blueSorted.length >= 4) {
+      // Green 3 & Blue 4 vs Green 4 & Blue 3
+      const team3 = [greenSorted[2], blueSorted[3]];
+      const team4 = [greenSorted[3], blueSorted[2]];
+      
+      // Create second match
+      matches.push({
+        id: `match-${Date.now()}-mix1b-r3`,
+        court: 'Mix Round',
+        team1: team3,
+        team2: team4,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 3,
+        groupColor: 'mix'
+      });
+    }
+  }
+  
+  // Mix 2: Yellow + Pink
+  if (groupedPlayers.yellow.length >= 2 && groupedPlayers.pink.length >= 2) {
+    // Sort players by rating
+    const yellowSorted = [...groupedPlayers.yellow].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    const pinkSorted = [...groupedPlayers.pink].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    
+    // Yellow 1 & Pink 2 vs Yellow 2 & Pink 1
+    const team1 = [yellowSorted[0], pinkSorted[1]];
+    const team2 = [yellowSorted[1], pinkSorted[0]];
+    
+    // Create match
+    matches.push({
+      id: `match-${Date.now()}-mix2-r3`,
+      court: 'Mix Round',
+      team1: team1,
+      team2: team2,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: 3,
+      groupColor: 'mix'
+    });
+    
+    // If we have enough players, create a second match
+    if (yellowSorted.length >= 4 && pinkSorted.length >= 4) {
+      // Yellow 3 & Pink 4 vs Yellow 4 & Pink 3
+      const team3 = [yellowSorted[2], pinkSorted[3]];
+      const team4 = [yellowSorted[3], pinkSorted[2]];
+      
+      // Create second match
+      matches.push({
+        id: `match-${Date.now()}-mix2b-r3`,
+        court: 'Mix Round',
+        team1: team3,
+        team2: team4,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 3,
+        groupColor: 'mix'
+      });
+    }
+  }
+}
+
+/**
+ * Creates Round 4 Americano matches (1&3 vs 2&4 in each group)
+ * @param {Array} matches - The matches array to add to
+ * @param {Object} groupedPlayers - Players grouped by color
+ */
+createAmericanoRound4Matches(matches, groupedPlayers) {
+  ['green', 'blue', 'yellow', 'pink'].forEach((color, groupIndex) => {
+    const players = groupedPlayers[color];
+    const courtNames = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+    
+    // Skip if not enough players
+    if (players.length < 4) return;
+    
+    // Sort players by rating
+    const sortedPlayers = [...players].sort((a, b) => (b.ranking || 0) - (a.ranking || 0));
+    
+    // Team 1: Players 1 & 3
+    const team1 = [sortedPlayers[0], sortedPlayers[2]];
+    
+    // Team 2: Players 2 & 4
+    const team2 = [sortedPlayers[1], sortedPlayers[3]];
+    
+    // Create match
+    matches.push({
+      id: `match-${Date.now()}-${groupIndex}-r4`,
+      court: courtNames[groupIndex],
+      team1: team1,
+      team2: team2,
+      score1: null,
+      score2: null,
+      completed: false,
+      round: 4,
+      groupColor: color
+    });
+    
+    // If we have 8 players in a group, create a second match
+    if (players.length >= 8) {
+      // Team 3: Players 5 & 7
+      const team3 = [sortedPlayers[4], sortedPlayers[6]];
+      
+      // Team 4: Players 6 & 8
+      const team4 = [sortedPlayers[5], sortedPlayers[7]];
+      
+      // Create second match
+      matches.push({
+        id: `match-${Date.now()}-${groupIndex}-r4-b`,
+        court: courtNames[groupIndex],
+        team1: team3,
+        team2: team4,
+        score1: null,
+        score2: null,
+        completed: false,
+        round: 4,
+        groupColor: color
+      });
+    }
+  });
+}
   
   // Cleanup listeners when page unloads
   cleanup() {

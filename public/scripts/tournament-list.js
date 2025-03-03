@@ -1,4 +1,6 @@
+// public/scripts/tournament-list.js
 import firebaseService from './services/firebase-service.js';
+import { routingService } from './services/routing-service.js';
 
 class TournamentList {
   constructor() {
@@ -118,19 +120,19 @@ class TournamentList {
     // Calculate player count information
     const registeredPlayers = tournament.participants || 0;
     
-    // Määra maxPlayers väärtus, arvestades võimalust, et maxParticipants võib olla undefined
+    // Determine maxPlayers value, accounting for the possibility it might be undefined
     let maxPlayers = tournament.maxParticipants;
     
-    // Täiendusloogika - näita olekut õigesti baseerudes tegelikel andmetel
+    // Display logic - show status correctly based on actual data
     let playersText;
     let playersClass = '';
     
     if (typeof maxPlayers === 'undefined') {
-      // Kui maxParticipants on undefined, näita lihtsalt mängijate arvu
+      // If maxParticipants is undefined, just show the player count
       playersText = String(registeredPlayers);
     } else {
-      // Kui maksimum on teada, siis kontrolli, kas turniir on täis
-      maxPlayers = Number(maxPlayers) || 16; // Kasuta vaikimisi 16, kui ei saa numbriks teisendada
+      // If maximum is known, check if tournament is full
+      maxPlayers = Number(maxPlayers) || 16; // Default to 16 if can't convert to number
       const isFullyBooked = maxPlayers > 0 && 
                            registeredPlayers > 0 && 
                            registeredPlayers >= maxPlayers;
@@ -164,7 +166,7 @@ class TournamentList {
         </div>
       </div>
       <div class="tournament-actions">
-        <button class="btn-view" onclick="TournamentList.viewTournament('${tournament.id}', ${tournament.status_id})">
+        <button class="btn-view" onclick="TournamentList.viewTournament('${tournament.id}')">
           ${status === 'completed' ? 'View Results' : 'View Tournament'}
         </button>
       </div>
@@ -172,15 +174,9 @@ class TournamentList {
     return card;
   }
 
-  static viewTournament(tournamentId, statusId) {
-    localStorage.setItem('selectedTournament', tournamentId);
-    
-    // Redirect to appropriate page based on status
-    if (statusId === 3) { // Completed tournament
-      window.location.href = 'tournament-stats.html';
-    } else {
-      window.location.href = 'tournament-management.html';
-    }
+  static viewTournament(tournamentId) {
+    // Use the routing service instead of direct navigation
+    routingService.routeToTournament(tournamentId);
   }
 
   renderTournaments(tournamentList = this.tournaments) {
