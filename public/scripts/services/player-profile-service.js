@@ -216,6 +216,20 @@ class PlayerProfile {
     }
   }
   
+  async loadPlayerProfile(playerId) {
+    if (!playerId) {
+      console.warn('No player ID provided, skipping profile loading');
+      return;
+    }
+    
+    try {
+      return await playerProfileService.getPlayerProfile(playerId);
+    } catch (error) {
+      console.error('Error loading player profile:', error);
+    }
+  }
+
+
   updateStats() {
     console.log('Updating player statistics display');
     

@@ -200,7 +200,7 @@ class TournamentManager {
     
     try {
       // Get all players to search by name
-      const allPlayers = this.registeredPlayers;
+      const allPlayers = await firebaseService.getAllPlayers();
       
       // Track results
       const results = {
