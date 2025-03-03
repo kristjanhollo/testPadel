@@ -867,75 +867,6 @@ getGroupPlayers(groupColor) {
   });
   return players;
 }
-/**
- * Salvestab mängijate grupikuuluvuse andmebaasi
- */
-async saveGroups() {
-  try {
-    // Näita laadimisanimatsiooni
-    Swal.fire({
-      title: 'Saving group assignments...',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
-    });
-    
-    // Kogu gruppide info
-    const groupAssignments = {
-      green: this.getGroupPlayers('green'),
-      blue: this.getGroupPlayers('blue'),
-      yellow: this.getGroupPlayers('yellow'),
-      pink: this.getGroupPlayers('pink')
-    };
-    
-    // Uuenda turniirimängijate grupikuuluvust
-    this.tournamentPlayers = this.tournamentPlayers.map(player => {
-      // Otsi mängija kõigist gruppidest
-      for (const [color, players] of Object.entries(groupAssignments)) {
-        const groupPlayer = players.find(p => p.id === player.id);
-        if (groupPlayer) {
-          player.group = color;
-          break;
-        }
-      }
-      return player;
-    });
-    
-    // Salvesta andmebaasi
-    await firebaseService.updateTournamentPlayers(
-      this.selectedTournamentId,
-      this.tournamentPlayers
-    );
-    
-    Swal.close();
-    
-    // Määra õige bracketi URL sõltuvalt formaadist
-    const bracketUrl = this.tournamentData.format === 'Americano' 
-      ? 'tournament-bracket-Americano.html' 
-      : 'tournament-bracket-M.html';
-    
-    // Küsi, kas kasutaja soovib liikuda bracketi vaatele
-    const result = await Swal.fire({
-      title: 'Groups Saved!',
-      text: 'Do you want to go to the tournament bracket now?',
-      icon: 'success',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, go to bracket',
-      cancelButtonText: 'No, stay here'
-    });
-    
-    if (result.isConfirmed) {
-      window.location.href = bracketUrl;
-    }
-    
-  } catch (error) {
-    Swal.close();
-    console.error('Error saving groups:', error);
-    Swal.fire('Error', 'Failed to save group assignments. Please try again.', 'error');
-  }
-}
-
 
 createMatchesBetweenGroups(group1, group2) {
     return group1.map((player1, index) => ({
@@ -1256,6 +1187,8 @@ autoAssignPlayersToGroup(groupColor) {
       const resetGroupsBtn = document.getElementById('resetGroups');
       
       if (saveGroupsBtn) {
+        console.log(this.tournamentData.format);
+        console.log('eee');
         saveGroupsBtn.addEventListener('click', () => this.saveGroups());
       }
       
@@ -1596,6 +1529,10 @@ autoAssignPlayersToGroup(groupColor) {
       );
       
       Swal.close();
+
+      const bracketUrl = this.tournamentData.format.trim().toLowerCase() === 'americano' 
+      ? 'tournament-bracket-Americano.html' 
+      : 'tournament-bracket-M.html';
       
       // Ask if user wants to go directly to the bracket view
       const result = await Swal.fire({
@@ -1608,7 +1545,7 @@ autoAssignPlayersToGroup(groupColor) {
       });
       
       if (result.isConfirmed) {
-        window.location.href = 'tournament-bracket-Americano.html';
+        window.location.href = bracketUrl;
       }
       
     } catch (error) {
