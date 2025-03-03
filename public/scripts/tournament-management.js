@@ -48,6 +48,8 @@ class TournamentManager {
       this.showGroupAssignmentsSection();
       this.initializeGroupAssignments();
       this.initializeGroupDragAndDrop();
+      this.initializeSearchFunctionality();
+      this.initializeQuickAdd();
       
       // Kontrolli, kas bracket eksisteerib ja taasta grupid sellest
       if (this.tournamentData && this.tournamentData.format === 'Americano') {
