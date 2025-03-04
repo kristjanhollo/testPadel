@@ -37,21 +37,32 @@ class PlayerProfile {
   }
   
   async init() {
-    console.log('Player profile page loaded');
-    
+    console.log('Player profile service initialized');
+  
     try {
+      // Check if we're on the player profile page
+      const isProfilePage = window.location.pathname.includes('player-profile.html');
+      
       // Get player ID from URL parameter
       const urlParams = new URLSearchParams(window.location.search);
       this.playerId = urlParams.get('id');
-      
       console.log('Player ID from URL:', this.playerId);
       
+      // Only require player ID on the profile page
       if (!this.playerId) {
-        console.error('No player ID provided');
-        alert('No player ID provided');
-        window.location.href = 'player-management.html';
-        return;
+        if (isProfilePage) {
+          console.error('No player ID provided');
+          alert('No player ID provided');
+          window.location.href = 'player-management.html';
+          return;
+        } else {
+          // On other pages, just log a debug message and continue
+          console.debug('No player ID in URL (not on profile page)');
+          return; // Exit early as no player data is needed
+        }
       }
+      
+      // Continue only if we have a player ID (either on profile page or other pages)
       
       // Verify Firebase service is available
       if (typeof firebaseService === 'undefined') {
@@ -60,13 +71,15 @@ class PlayerProfile {
       }
       
       // Show loading indicator
-      Swal.fire({
-        title: 'Loading player data...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
+      if (isProfilePage) {
+        Swal.fire({
+          title: 'Loading player data...',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+      }
       
       // Load player data from Firebase
       console.log('Fetching player data from Firebase...');
@@ -74,36 +87,52 @@ class PlayerProfile {
       console.log('Player data received:', this.playerData);
       
       if (!this.playerData) {
-        console.error('Player not found');
-        alert('Player not found');
-        window.location.href = 'player-management.html';
-        return;
+        if (isProfilePage) {
+          console.error('Player not found');
+          alert('Player not found');
+          window.location.href = 'player-management.html';
+          return;
+        } else {
+          console.warn('Player not found, but not on profile page');
+          return;
+        }
       }
       
-      // Initialize UI with player data
-      this.initializePlayerUI();
-      
-      // Load data for the player
-      await this.loadPlayerData();
-      
-      // Render all sections
-      this.renderRatingChart();
-      this.renderMatchHistory();
-      this.renderTournamentHistory();
-      this.renderGroupHistory();
-      this.updateStats();
-      
-      // Close loading indicator
-      Swal.close();
-      
+      // Only continue with UI updates if on profile page
+      if (isProfilePage) {
+        // Initialize UI with player data
+        this.initializePlayerUI();
+        
+        // Load data for the player
+        await this.loadPlayerData();
+        
+        // Render all sections
+        this.renderRatingChart();
+        this.renderMatchHistory();
+        this.renderTournamentHistory();
+        this.renderGroupHistory();
+        this.updateStats();
+        
+        // Close loading indicator
+        Swal.close();
+      }
     } catch (error) {
       console.error('Error loading player profile:', error);
-      Swal.close();
-      Swal.fire({
-        title: 'Error',
-        text: 'Error loading player profile: ' + error.message,
-        icon: 'error'
-      });
+      
+      // Only show error UI if on profile page
+      if (window.location.pathname.includes('player-profile.html')) {
+        try {
+          Swal.close();
+          Swal.fire({
+            title: 'Error',
+            text: 'Error loading player profile: ' + error.message,
+            icon: 'error'
+          });
+        } catch (e) {
+          // Fallback if Swal is not available
+          alert('Error loading player profile: ' + error.message);
+        }
+      }
     }
   }
   
@@ -215,7 +244,7 @@ class PlayerProfile {
       return Promise.reject(error);
     }
   }
-  
+
   async loadPlayerProfile(playerId) {
     if (!playerId) {
       console.warn('No player ID provided, skipping profile loading');
