@@ -239,27 +239,11 @@ class FirebaseService {
    */
   async updateTournament(tournamentId, tournamentData) {
     try {
-      // Normalize status data - if there's a status object, extract just the status_id
-      let normalizedData = { ...tournamentData };
-      
-      // If status is an object with status_id, extract just the status_id
-      if (normalizedData.status && typeof normalizedData.status === 'object' && 'status_id' in normalizedData.status) {
-        normalizedData.status_id = normalizedData.status.status_id;
-        delete normalizedData.status;
-      }
-      
-      // If status is a direct number, convert it to status_id
-      if (typeof normalizedData.status === 'number') {
-        normalizedData.status_id = normalizedData.status;
-        delete normalizedData.status;
-      }
-      
       const tournamentRef = doc(db, this.collections.TOURNAMENTS, tournamentId);
       await updateDoc(tournamentRef, {
-        ...normalizedData,
+        ...tournamentData,
         updated_at: serverTimestamp()
       });
-      
       return true;
     } catch (error) {
       console.error('Error updating tournament:', error);
