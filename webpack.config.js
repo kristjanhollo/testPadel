@@ -16,6 +16,8 @@ const htmlPages = [
   { name: 'tournament-create', chunk: 'tournament-create' },
   { name: 'tournament-list', chunk: 'tournament-list' },
   { name: 'tournament-management', chunk: 'tournament-management' },
+  { name: 'tournament-management-americano', chunk: 'tournament-management-americano' },
+  { name: 'tournament-management-mexicano', chunk: 'tournament-management-mexicano' },
   { name: 'tournament-stats', chunk: 'tournament-stats' }
 ];
 
@@ -51,6 +53,8 @@ module.exports = (env, argv) => {
       'tournament-create': './public/scripts/tournament-create.js',
       'tournament-list': './public/scripts/tournament-list.js',
       'tournament-management': './public/scripts/tournament-management.js',
+      'tournament-management-americano': './public/scripts/controllers/americano-management-controller.js',
+      'tournament-management-mexicano': './public/scripts/controllers/mexicano-management-controller.js',
       'tournament-stats': './public/scripts/tournament-stats.js',
       '404': './public/scripts/handle-404.js',
     },

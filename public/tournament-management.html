@@ -13,7 +13,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     
-    
+    <!-- No need for manual import - Webpack will handle this through the entry point -->
 </head>
 <body>
     <div class="container">
@@ -21,121 +21,20 @@
             <h1>Padel Bandeja</h1>
             <p>Tournament Management</p>
         </header>
-
+        
         <main>
-            <div class="tournament-info">
-                <h2 id="tournamentName">Tournament Name</h2>
-                <p id="tournamentDate">Date: </p>
-                <p id="tournamentLocation">Location: </p>
-                <p id="tournamentFormat">Format: </p>
-                
-
-            </div>
-
-            <div class="input-group mb-3">
-                <span class="input-group-text" id="search-icon">
-                    <i class="bi bi-search"></i>
-                </span>
-                <input type="text" class="form-control" placeholder="Search players..." id="searchInput" aria-label="Search Players" autocomplete="off">
-            </div>
-            <div id="resultsContainer" class="mb-3"></div>
-
-            <!-- Players Pool Section -->
-            <div class="players-section">
-                <div class="players-section">
-                    <div class="section-header">
-                        <div class="section-header">
-                            <h3>Available Players</h3>
-                            <button id="quickAddButton" class="btn btn-secondary">Quick Add</button>
-                        </div>
-                        <div id="playersList" class="players-grid">
-                            <!-- Players will be added here dynamically -->
-                        </div>
-                  </div>
-                  
-                  <!-- Quick Add Modal -->
-                  <div id="quickAddModal" class="modal">
-                    <div class="modal-content">
-                      <span class="close-modal">&times;</span>
-                      <h2>Quick Add Players</h2>
-                      <p>Paste player names (one per line). Players must already exist in the database.</p>
-                      <form id="quickAddForm">
-                        <div class="form-group">
-                          <textarea id="playerNames" rows="10" placeholder="Paste player names here (one per line)" required></textarea>
-                        </div>
-                        <div id="quickAddStatus" class="status-message"></div>
-                        <div class="modal-actions">
-                          <button type="button" class="btn btn-secondary close-btn">Cancel</button>
-                          <button type="submit" class="btn btn-primary">Add Players</button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
+            <div class="loading-container">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
                 </div>
-            </div>
-
-            <!-- Group Assignments Section (for Americano format) -->
-            <div class="group-assignments-section" id="groupAssignmentsSection" style="display: none;">
-                <h3>Group Assignments</h3>
-                <div class="groups-container">
-                    <!-- Green Group -->
-                    <div class="group-container green-group">
-                        <div class="group-header">Green Group (Padel Arenas)</div>
-                        <div class="group-players" id="greenGroupPlayers">
-                            <!-- Players will be added here dynamically -->
-                        </div>
-                    </div>
-                    
-                    <!-- Blue Group -->
-                    <div class="group-container blue-group">
-                        <div class="group-header">Blue Group (Coolbet)</div>
-                        <div class="group-players" id="blueGroupPlayers">
-                            <!-- Players will be added here dynamically -->
-                        </div>
-                    </div>
-                    
-                    <!-- Yellow Group -->
-                    <div class="group-container yellow-group">
-                        <div class="group-header">Yellow Group (Lux Express)</div>
-                        <div class="group-players" id="yellowGroupPlayers">
-                            <!-- Players will be added here dynamically -->
-                        </div>
-                    </div>
-                    
-                    <!-- Pink Group -->
-                    <div class="group-container pink-group">
-                        <div class="group-header">Pink Group (3p Logistics)</div>
-                        <div class="group-players" id="pinkGroupPlayers">
-                            <!-- Players will be added here dynamically -->
-                        </div>
-                    </div>
-                </div>
-                <div class="control-buttons">
-                    <button id="saveGroups" class="btn-primary">Save Groups</button>
-                    <button id="resetGroups" class="btn-secondary">Reset Groups</button>
-                </div>
-            </div>
-
-            <!-- Court Assignments Section -->
-            <div class="courts-section">
-                <h3>First Round Court Assignments</h3>
-                <div id="courtsGrid" class="courts-grid">
-                    <!-- Court cards with team drop zones will be added here -->
-                </div>
-                <div class="control-buttons">
-                    <button id="setFirstRound" class="btn-primary">Set as First Round</button>
-                    <button id="autoAssignPlayers" class="btn-secondary">Auto Assign Players</button>
-                    <button id="resetAssignments" class="btn-secondary">Reset Assignments</button>
-                </div>
+                <p>Loading tournament data...</p>
             </div>
         </main>
-
+        
         <nav class="page-nav">
             <a href="index.html" class="nav-link">Home</a>
             <a href="tournament-list.html" class="nav-link">Back to Tournaments</a>
-            <a href="tournament-bracket-M.html" class="nav-link">Tournament Bracket</a>
         </nav>
     </div>
-
 </body>
 </html>

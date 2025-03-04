@@ -1,6 +1,6 @@
-import firebaseService from "./services/firebase-service";
-import { routingService } from "./services/routing-service";
-import playerProfileService from './services/player-profile-service';
+// Import dependencies and styles
+import '../styles/tournament-bracket-Mexicano.css';
+import firebaseService from './services/firebase-service';
 
 // Import utility modules
 import {
@@ -17,23 +17,21 @@ import {
 class TournamentBracketMexicano {
   constructor() {
     // DOM Elements
-    this.timerDisplay = document.getElementById("gameTimer");
-    this.generateBtn = document.getElementById("generateBracket");
-    this.startTimerBtn = document.getElementById("startTimer");
-    this.resetRoundBtn = document.getElementById("resetRound");
-    this.playerCountEl = document.getElementById("playerCount");
-    this.roundCountEl = document.getElementById("roundCount");
-    this.currentMatches = document.getElementById("currentMatches");
-    this.standings = document.getElementById("standings");
-    this.registeredPlayersContainer =
-      document.getElementById("registeredPlayers");
-    this.playersGrid =
-      this.registeredPlayersContainer?.querySelector(".players-grid");
-    this.roundTabs = document.getElementById("roundTabs");
-    this.roundContent = document.getElementById("roundContent");
-
+    this.timerDisplay = document.getElementById('gameTimer');
+    this.generateBtn = document.getElementById('generateBracket');
+    this.startTimerBtn = document.getElementById('startTimer');
+    this.resetRoundBtn = document.getElementById('resetRound');
+    this.playerCountEl = document.getElementById('playerCount');
+    this.roundCountEl = document.getElementById('roundCount');
+    this.currentMatches = document.getElementById('currentMatches');
+    this.standings = document.getElementById('standings');
+    this.registeredPlayersContainer = document.getElementById('registeredPlayers');
+    this.playersGrid = this.registeredPlayersContainer?.querySelector('.players-grid');
+    this.roundTabs = document.getElementById('roundTabs');
+    this.roundContent = document.getElementById('roundContent');
+    
     // State
-    this.selectedTournamentId = localStorage.getItem("selectedTournament");
+    this.selectedTournamentId = localStorage.getItem('selectedTournament');
     this.tournament = null;
     this.players = [];
     this.bracketData = null;
@@ -41,226 +39,60 @@ class TournamentBracketMexicano {
     this.incompleteCourts = [];
     this.playerAssignments = new Map();
     this.unsubscribeFunctions = [];
-
+    
     // Constants
-    this.COURT_ORDER = [
-      "Padel Arenas",
-      "Coolbet",
-      "Lux Express",
-      "3p Logistics",
-    ];
-
+    this.COURT_ORDER = ['Padel Arenas', 'Coolbet', 'Lux Express', '3p Logistics'];
+    
     // Initialize game timer
     this.gameTimer = this.createGameTimer();
-
+    
     // Initialize the bracket
     this.init();
   }
   
-  async recordMatchResultForPlayer(match) {
-    if (!match || !match.completed) return;
-    
-    try {
-      // Määra winner ja loser tiimid
-      const team1Won = match.score1 > match.score2;
-      const winningTeam = team1Won ? match.team1 : match.team2;
-      const losingTeam = team1Won ? match.team2 : match.team1;
-      
-      // Formaadi mängu andmed salvestamiseks
-      const matchData = {
-        date: new Date().toISOString(),
-        tournament: this.tournament?.name || 'Tournament',
-        tournamentId: this.selectedTournamentId,
-        round: match.round,
-        courtName: match.courtName || match.court,
-        score1: match.score1,
-        score2: match.score2,
-        points: team1Won ? match.score1 : match.score2
-      };
-      
-      // Salvesta võitnud tiimi mängijatel
-      for (const player of winningTeam) {
-        if (!player || !player.id) continue;
-        
-        // Loo vastaste nimede string
-        const opponents = losingTeam.map(p => p.name).join(' & ');
-        
-        // Loo mängijaspetsiifiline mängu kirje
-        const playerMatchData = {
-          ...matchData,
-          won: true,
-          result: 'win',
-          opponent: opponents,
-          vs: losingTeam.map(p => ({ id: p.id, name: p.name }))
-        };
-        
-        // Salvesta mäng mängija profiilile
-        if (window.playerProfileService && typeof window.playerProfileService.addMatchToPlayer === 'function') {
-          try {
-            await window.playerProfileService.addMatchToPlayer(player.id, playerMatchData);
-            console.log(`Recorded win for player ${player.name}`);
-          } catch (err) {
-            console.warn(`Failed to record win for player ${player.name}:`, err);
-          }
-        }
-      }
-      
-      // Salvesta kaotanud tiimi mängijatel
-      for (const player of losingTeam) {
-        if (!player || !player.id) continue;
-        
-        // Loo vastaste nimede string
-        const opponents = winningTeam.map(p => p.name).join(' & ');
-        
-        // Loo mängijaspetsiifiline mängu kirje
-        const playerMatchData = {
-          ...matchData,
-          won: false,
-          result: 'loss',
-          opponent: opponents,
-          vs: winningTeam.map(p => ({ id: p.id, name: p.name }))
-        };
-        
-        // Salvesta mäng mängija profiilile
-        if (window.playerProfileService && typeof window.playerProfileService.addMatchToPlayer === 'function') {
-          try {
-            await window.playerProfileService.addMatchToPlayer(player.id, playerMatchData);
-            console.log(`Recorded loss for player ${player.name}`);
-          } catch (err) {
-            console.warn(`Failed to record loss for player ${player.name}:`, err);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error recording match result:', error);
-    }
-  }
-
-
   async init() {
-    window.playerProfileService = playerProfileService;
     if (!firebaseService) {
-      console.error(
-        "Firebase service is not loaded! Make sure firebase-service.js is included before this script."
-      );
+      console.error('Firebase service is not loaded! Make sure firebase-service.js is included before this script.');
       return;
     }
-
+    console.log('still loading');
     try {
-      console.log("Initializing tournament bracket...");
-
       // Show loading
       Swal.fire({
-        title: "Loading tournament data...",
+        title: 'Loading tournament data...',
         allowOutsideClick: false,
         didOpen: () => {
           Swal.showLoading();
-        },
+        }
       });
-      
       
       // Set up listeners for data changes
       this.setupDataListeners();
-
+      
       // Wait for initial data
       await this.waitForData();
-
+      
       Swal.close();
-
+      
       // Render initial state
       this.updateDisplay();
-
+      
       // Set up event listeners
       this.setupEventListeners();
-
-      // Use routing service to handle any URL parameters or stored state
-      routingService.handleBracketPageLoad({
-        onRoundLoad: (round) => {
-          if (round && typeof round === "number" && round > 0) {
-            this.activeRound = round;
-            this.renderRoundContent(round);
-
-            // Update UI to reflect the correct round
-            document.querySelectorAll(".round-tab").forEach((tab) => {
-              tab.classList.remove("active");
-              if (parseInt(tab.dataset.round) === round) {
-                tab.classList.add("active");
-              }
-            });
-          }
-        },
-      });
     } catch (error) {
       Swal.close();
-      console.error("Error initializing tournament bracket:", error);
+      console.error('Error initializing tournament bracket:', error);
       Swal.fire({
-        title: "Error",
-        text: "Failed to load tournament data. Please try again later.",
-        icon: "error",
-        confirmButtonText: "Go Back to List",
+        title: 'Error',
+        text: 'Failed to load tournament data. Please try again later.',
+        icon: 'error',
+        confirmButtonText: 'Go Back to List',
       }).then(() => {
-        window.location.href = "tournament-list.html";
+        window.location.href = 'tournament-list.html';
       });
     }
   }
-
-  // Then update the renderRoundTabs method to include state persistence:
-  renderRoundTabs() {
-    if (!this.roundTabs) {
-      console.warn(
-        'Round tabs element not found in the DOM. Make sure you have added the HTML element with id "roundTabs".'
-      );
-      return; // Exit the function if the element doesn't exist
-    }
-
-    // Clear previous content
-    this.roundTabs.innerHTML = "";
-
-    // Determine total rounds
-    const totalRounds = this.bracketData.currentRound || 4;
-
-    // Create tab for each round (including past rounds)
-    for (let i = 1; i <= totalRounds; i++) {
-      const roundTab = document.createElement("div");
-      roundTab.className = `round-tab ${
-        i === this.activeRound ? "active" : ""
-      }`;
-      roundTab.textContent = `Round ${i}`;
-      roundTab.dataset.round = i;
-
-      // Add click event
-      roundTab.addEventListener("click", () => {
-        // Update active tab
-        document.querySelectorAll(".round-tab").forEach((tab) => {
-          tab.classList.remove("active");
-        });
-        roundTab.classList.add("active");
-
-        // Store current round in localStorage for state persistence
-        localStorage.setItem("currentRound", i);
-
-        // Update URL without page refresh, for better state management
-        const newUrl = new URL(window.location);
-        newUrl.searchParams.set("round", i);
-        window.history.pushState({}, "", newUrl);
-
-        // If selecting a past round that isn't the current active one, confirm with user
-        if (i < this.bracketData.currentRound && i !== this.activeRound) {
-          this.confirmPreviousRoundEdit(i);
-        } else {
-          // Update active round normally
-          this.activeRound = parseInt(roundTab.dataset.round);
-          this.renderRoundContent(this.activeRound);
-        }
-      });
-
-      this.roundTabs.appendChild(roundTab);
-    }
-
-    // Render first round by default
-    this.renderRoundContent(this.activeRound);
-  }
-
+  
   setupDataListeners() {
     // Listen for tournament data changes
     const unsubscribeTournament = firebaseService.listenToTournament(
@@ -269,11 +101,11 @@ class TournamentBracketMexicano {
         if (tournamentData) {
           this.tournament = tournamentData;
         } else {
-          console.error("Tournament not found");
+          console.error('Tournament not found');
         }
       }
     );
-
+    
     // Listen for bracket data changes
     const unsubscribeBracket = firebaseService.listenToTournamentBracket(
       this.selectedTournamentId,
@@ -282,11 +114,11 @@ class TournamentBracketMexicano {
           this.bracketData = bracketData;
           this.updateDisplay();
         } else {
-          console.error("Bracket data not found");
+          console.error('Bracket data not found');
         }
       }
     );
-
+    
     // Listen for tournament players changes
     const unsubscribePlayers = firebaseService.listenToTournamentPlayers(
       this.selectedTournamentId,
@@ -295,14 +127,10 @@ class TournamentBracketMexicano {
         this.updateDisplay();
       }
     );
-
-    this.unsubscribeFunctions.push(
-      unsubscribeTournament,
-      unsubscribeBracket,
-      unsubscribePlayers
-    );
+    
+    this.unsubscribeFunctions.push(unsubscribeTournament, unsubscribeBracket, unsubscribePlayers);
   }
-
+  
   // Wait for initial data to be loaded
   waitForData() {
     return new Promise((resolve) => {
@@ -312,7 +140,7 @@ class TournamentBracketMexicano {
           resolve();
         }
       }, 100);
-
+      
       // Timeout after 15 seconds
       setTimeout(() => {
         clearInterval(checkInterval);
@@ -320,53 +148,53 @@ class TournamentBracketMexicano {
       }, 15000);
     });
   }
-
+  
   updateDisplay() {
     if (!this.bracketData) return;
-
+    
     // Update round display
     if (this.roundCountEl) {
       this.roundCountEl.textContent = `Round ${this.bracketData.currentRound}/4`;
     }
-
+    
     // Update player count
     if (this.playerCountEl && this.players) {
       this.playerCountEl.textContent = `${this.players.length} Players`;
     }
-
+    
     // Set the active round to the current round in bracket data
     this.activeRound = this.bracketData.currentRound;
-
+    
+   
+    
     // Render matches for the current round
     this.renderMatches();
-
+    
     // Render standings
     this.renderStandings();
-
+    
     // Render registered players
     this.renderRegisteredPlayers();
-
+    
     // Render game scores
     this.renderGameScores();
-
+    
     // Check for completed tournament
     this.checkRoundCompletion();
 
-    // Render round tabs for navigation
-    this.renderRoundTabs();
+     // Render round tabs for navigation
+     this.renderRoundTabs();
   }
-
+  
   setupEventListeners() {
     // Generate next round button
     if (this.generateBtn) {
-      this.generateBtn.addEventListener("click", () =>
-        this.generateNextRound()
-      );
+      this.generateBtn.addEventListener('click', () => this.generateNextRound());
     }
-
+    
     // Start/reset timer button
     if (this.startTimerBtn) {
-      this.startTimerBtn.addEventListener("click", () => {
+      this.startTimerBtn.addEventListener('click', () => {
         if (this.gameTimer.isRunning) {
           this.gameTimer.reset();
         } else {
@@ -374,19 +202,17 @@ class TournamentBracketMexicano {
         }
       });
     }
-
+    
     // Reset round button
     if (this.resetRoundBtn) {
-      this.resetRoundBtn.addEventListener("click", () =>
-        this.resetCurrentRound()
-      );
+      this.resetRoundBtn.addEventListener('click', () => this.resetCurrentRound());
     }
-
+    
     // Set global functions for HTML event handlers
     window.makeScoreEditable = (element, matchId, scoreType) => {
       this.makeScoreEditable(element, matchId, scoreType);
     };
-
+    
     window.deletePlayer = (playerId) => {
       this.deletePlayer(playerId);
     };
@@ -395,119 +221,114 @@ class TournamentBracketMexicano {
   async confirmPreviousRoundEdit(roundNumber) {
     // Ask user to confirm they want to edit a previous round
     const result = await Swal.fire({
-      title: "Edit Previous Round?",
+      title: 'Edit Previous Round?',
       text: `Going back to edit Round ${roundNumber} will clear all results from subsequent rounds. Are you sure?`,
-      icon: "warning",
+      icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: "Yes, edit round",
-      cancelButtonText: "Cancel",
+      confirmButtonText: 'Yes, edit round',
+      cancelButtonText: 'Cancel'
     });
-
+    
     if (!result.isConfirmed) {
       // Reset tab selection to current round
-      document.querySelectorAll(".round-tab").forEach((tab) => {
-        tab.classList.remove("active");
+      document.querySelectorAll('.round-tab').forEach(tab => {
+        tab.classList.remove('active');
         if (parseInt(tab.dataset.round) === this.activeRound) {
-          tab.classList.add("active");
+          tab.classList.add('active');
         }
       });
       return;
     }
-
+    
     try {
       // Show loading indicator
       Swal.fire({
-        title: "Resetting subsequent rounds...",
+        title: 'Resetting subsequent rounds...',
         allowOutsideClick: false,
         didOpen: () => {
           Swal.showLoading();
-        },
+        }
       });
-
+      
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-
+      
       // Keep only the matches from rounds up to the selected round
-      updatedBracketData.completedMatches =
-        updatedBracketData.completedMatches.filter(
-          (match) => match.round <= roundNumber
-        );
-
+      updatedBracketData.completedMatches = updatedBracketData.completedMatches.filter(
+        match => match.round <= roundNumber
+      );
+      
       // Clear all existing matches in courts
-      updatedBracketData.courts.forEach((court) => {
+      updatedBracketData.courts.forEach(court => {
         court.matches = [];
       });
-
+      
       // Set current round to the selected round
       updatedBracketData.currentRound = roundNumber;
-
+      
       // Recalculate standings based on remaining matches
       this.recalculateStandings(updatedBracketData);
-
+      
       // Save updated bracket data
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
         updatedBracketData
       );
-
+      
       // Update active round
       this.activeRound = roundNumber;
-
+      
       Swal.close();
-
+      
       // Success message
       await Swal.fire({
-        title: "Round Reset",
+        title: 'Round Reset',
         text: `Successfully reset to Round ${roundNumber}. You can now edit the results.`,
-        icon: "success",
-        timer: 2000,
+        icon: 'success',
+        timer: 2000
       });
-
+      
       // Show registered players if going back to round 0
       if (roundNumber === 0 && this.registeredPlayersContainer) {
-        this.registeredPlayersContainer.style.display = "block";
+        this.registeredPlayersContainer.style.display = 'block';
       }
     } catch (error) {
       Swal.close();
-      console.error("Error resetting rounds:", error);
+      console.error('Error resetting rounds:', error);
       Swal.fire({
-        title: "Error",
-        text: "Failed to reset rounds. Please try again.",
-        icon: "error",
+        title: 'Error',
+        text: 'Failed to reset rounds. Please try again.',
+        icon: 'error'
       });
     }
   }
   renderRoundTabs() {
     if (!this.roundTabs) {
-      console.warn(
-        'Round tabs element not found in the DOM. Make sure you have added the HTML element with id "roundTabs".'
-      );
+      console.warn('Round tabs element not found in the DOM. Make sure you have added the HTML element with id "roundTabs".');
       return; // Exit the function if the element doesn't exist
     }
-
+  
     // Clear previous content
-    this.roundTabs.innerHTML = "";
-
+    this.roundTabs.innerHTML = '';
+    
     // Determine total rounds
     const totalRounds = this.bracketData.currentRound || 4;
-
+    
     // Create tab for each round (including past rounds)
     for (let i = 1; i <= totalRounds; i++) {
-      const roundTab = document.createElement("div");
-      roundTab.className = `round-tab ${
-        i === this.activeRound ? "active" : ""
-      }`;
+      const roundTab = document.createElement('div');
+      roundTab.className = `round-tab ${i === this.activeRound ? 'active' : ''}`;
       roundTab.textContent = `Round ${i}`;
       roundTab.dataset.round = i;
-
+      
       // Add click event
-      roundTab.addEventListener("click", () => {
+      roundTab.addEventListener('click', () => {
         // Update active tab
-        document.querySelectorAll(".round-tab").forEach((tab) => {
-          tab.classList.remove("active");
+        document.querySelectorAll('.round-tab').forEach(tab => {
+          tab.classList.remove('active');
         });
-        roundTab.classList.add("active");
-
+        roundTab.classList.add('active');
+        
         // If selecting a past round that isn't the current active one, confirm with user
         if (i < this.bracketData.currentRound && i !== this.activeRound) {
           this.confirmPreviousRoundEdit(i);
@@ -517,58 +338,58 @@ class TournamentBracketMexicano {
           this.renderRoundContent(this.activeRound);
         }
       });
-
+      
       this.roundTabs.appendChild(roundTab);
     }
-
+    
     // Render first round by default
     this.renderRoundContent(this.activeRound);
   }
 
   // Add this method to your TournamentBracketMexicano class
-  renderRoundContent(roundNumber) {
-    if (!this.roundContent) return;
+renderRoundContent(roundNumber) {
+  if (!this.roundContent) return;
 
-    // Clear previous content
-    this.roundContent.innerHTML = "";
-
-    // Get matches for this round
-    const roundMatches = this.bracketData.completedMatches.filter(
-      (match) => match.round === roundNumber
-    );
-
-    if (roundMatches.length === 0) {
-      this.roundContent.innerHTML = `
+  // Clear previous content
+  this.roundContent.innerHTML = '';
+  
+  // Get matches for this round
+  const roundMatches = this.bracketData.completedMatches.filter(
+    match => match.round === roundNumber
+  );
+  
+  if (roundMatches.length === 0) {
+    this.roundContent.innerHTML = `
       <div class="empty-section">No match data available for Round ${roundNumber}</div>
     `;
-      return;
+    return;
+  }
+  
+  // Group matches by court
+  const courtMatches = {};
+  roundMatches.forEach(match => {
+    if (!courtMatches[match.courtName]) {
+      courtMatches[match.courtName] = [];
     }
-
-    // Group matches by court
-    const courtMatches = {};
-    roundMatches.forEach((match) => {
-      if (!courtMatches[match.courtName]) {
-        courtMatches[match.courtName] = [];
-      }
-      courtMatches[match.courtName].push(match);
-    });
-
-    // Create section for each court
-    Object.keys(courtMatches).forEach((courtName) => {
-      const courtSection = document.createElement("div");
-      courtSection.className = "court-section";
-      courtSection.innerHTML = `<h4>${courtName}</h4>`;
-
-      const matchesContainer = document.createElement("div");
-      matchesContainer.className = "matches-container";
-
-      // Add each match
-      courtMatches[courtName].forEach((match) => {
-        const team1Won = match.score1 > match.score2;
-        const matchCard = document.createElement("div");
-        matchCard.className = "match-card";
-        matchCard.innerHTML = `
-        <div class="team-row ${team1Won ? "winner" : ""}">
+    courtMatches[match.courtName].push(match);
+  });
+  
+  // Create section for each court
+  Object.keys(courtMatches).forEach(courtName => {
+    const courtSection = document.createElement('div');
+    courtSection.className = 'court-section';
+    courtSection.innerHTML = `<h4>${courtName}</h4>`;
+    
+    const matchesContainer = document.createElement('div');
+    matchesContainer.className = 'matches-container';
+    
+    // Add each match
+    courtMatches[courtName].forEach(match => {
+      const team1Won = (match.score1 > match.score2);
+      const matchCard = document.createElement('div');
+      matchCard.className = 'match-card';
+      matchCard.innerHTML = `
+        <div class="team-row ${team1Won ? 'winner' : ''}">
           <div class="team-names">${this.getTeamNames(match.team1)}</div>
           <div class="team-score" 
                data-match-id="${match.id}" 
@@ -577,7 +398,7 @@ class TournamentBracketMexicano {
             ${match.score1}
           </div>
         </div>
-        <div class="team-row ${!team1Won ? "winner" : ""}">
+        <div class="team-row ${!team1Won ? 'winner' : ''}">
           <div class="team-names">${this.getTeamNames(match.team2)}</div>
           <div class="team-score"
                data-match-id="${match.id}" 
@@ -587,103 +408,54 @@ class TournamentBracketMexicano {
           </div>
         </div>
       `;
-
-        matchesContainer.appendChild(matchCard);
-      });
-
-      courtSection.appendChild(matchesContainer);
-      this.roundContent.appendChild(courtSection);
+      
+      matchesContainer.appendChild(matchCard);
     });
-  }
-
+    
+    courtSection.appendChild(matchesContainer);
+    this.roundContent.appendChild(courtSection);
+  });
+}
+  
   makeScoreEditable(element, matchId, scoreType) {
     // Check if we're already editing this score
-    if (element.querySelector(".score-input")) {
+    if (element.querySelector('.score-input')) {
       return;
     }
-  
-    const currentScore = element.textContent.trim() !== "-" ? element.textContent.trim() : "";
-  
+    
+    const currentScore = element.textContent !== '-' ? element.textContent : '';
+    
     // Create input element
-    const input = document.createElement("input");
-    input.type = "number";
-    input.className = "score-input";
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'score-input';
     input.value = currentScore;
     input.min = 0;
     input.max = 10;
   
     // Store original text for restoration if needed
     const originalText = element.textContent;
-  
+    
     // Style the parent element to indicate editing mode
-    element.classList.add("editing");
-  
-    // Add blur handler to save the value
+    element.classList.add('editing');
+    
+    // Add input handlers
     input.onblur = () => {
       this.handleScoreUpdate(element, input, matchId, scoreType, originalText);
     };
   
-    // Handle key events for better navigation
-    input.onkeydown = (e) => {
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault(); // Prevent default tab behavior
-        
-        // Save current value
-        this.handleScoreUpdate(element, input, matchId, scoreType, originalText)
-          .then(() => {
-            // After saving, find the next score element
-            const nextElement = this.findNextScoreElement(element, matchId, scoreType);
-            if (nextElement) {
-              // Make the next element editable
-              setTimeout(() => {
-                this.makeScoreEditable(
-                  nextElement,
-                  nextElement.dataset.matchId,
-                  nextElement.dataset.scoreType
-                );
-              }, 50);
-            }
-          });
+    input.onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        input.blur();
       }
     };
   
     // Clear text and add input
-    element.textContent = "";
+    element.textContent = '';
     element.appendChild(input);
     input.focus();
-    input.select(); // Select all text for easier typing
   }
-
-  // Improved method to find the next score element
-  findNextScoreElement(currentElement, currentMatchId, currentScoreType) {
-    // If we're on score1, try to find score2 in the same match first
-    if (currentScoreType === "score1") {
-      // Look for the score2 element in the same match
-      const scoreElements = document.querySelectorAll(
-        `.team-score[data-match-id="${currentMatchId}"]`
-      );
-      for (let el of scoreElements) {
-        if (el.dataset.scoreType === "score2") {
-          return el;
-        }
-      }
-    }
   
-    // If we're on score2 or didn't find a score2, find the next match
-    // Get all score elements in DOM order
-    const allScoreElements = document.querySelectorAll(".team-score");
-    const allScoreArray = Array.from(allScoreElements);
-  
-    // Find current element's index
-    const currentIndex = allScoreArray.indexOf(currentElement);
-    if (currentIndex === -1 || currentIndex === allScoreArray.length - 1) {
-      return null; // Not found or last element
-    }
-  
-    // Return the next element
-    return allScoreArray[currentIndex + 1];
-  }
-
   // Create game timer
   createGameTimer() {
     return {
@@ -694,7 +466,7 @@ class TournamentBracketMexicano {
       start: () => {
         if (!this.gameTimer.isRunning) {
           this.gameTimer.isRunning = true;
-          this.startTimerBtn.textContent = "Reset Timer";
+          this.startTimerBtn.textContent = 'Reset Timer';
           this.gameTimer.interval = setInterval(() => {
             this.gameTimer.time--;
             this.gameTimer.updateDisplay();
@@ -708,10 +480,10 @@ class TournamentBracketMexicano {
       reset: () => {
         this.gameTimer.time = 20 * 60;
         this.gameTimer.isRunning = false;
-        this.startTimerBtn.textContent = "Start Timer";
+        this.startTimerBtn.textContent = 'Start Timer';
         clearInterval(this.gameTimer.interval);
         this.gameTimer.updateDisplay();
-        this.timerDisplay.classList.remove("time-up");
+        this.timerDisplay.classList.remove('time-up');
       },
 
       updateDisplay: () => {
@@ -719,34 +491,34 @@ class TournamentBracketMexicano {
         const seconds = this.gameTimer.time % 60;
         this.timerDisplay.textContent = `${minutes
           .toString()
-          .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+          .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       },
 
       timeUp: () => {
         clearInterval(this.gameTimer.interval);
         this.gameTimer.isRunning = false;
-        this.startTimerBtn.textContent = "Start Timer";
-        this.timerDisplay.classList.add("time-up");
+        this.startTimerBtn.textContent = 'Start Timer';
+        this.timerDisplay.classList.add('time-up');
         Swal.fire({
-          title: "Time's Up!",
-          text: "Round time is up! Please enter final scores.",
-          icon: "info",
+          title: 'Time\'s Up!',
+          text: 'Round time is up! Please enter final scores.',
+          icon: 'info'
         });
-      },
+      }
     };
   }
-
+  
   // Helper Functions
   getTeamNames(team) {
-    return team.map((player) => player.name).join(" & ");
+    return team.map((player) => player.name).join(' & ');
   }
 
   async generateNextRound() {
     if (!ValidationUtils.canStartNewRound(this.bracketData)) {
       Swal.fire({
-        title: "Cannot Start New Round",
-        text: "Previous round incomplete!",
-        icon: "warning",
+        title: 'Cannot Start New Round',
+        text: 'Previous round incomplete!',
+        icon: 'warning'
       });
       return;
     }
@@ -754,47 +526,47 @@ class TournamentBracketMexicano {
     try {
       // Show loading
       Swal.fire({
-        title: "Generating next round...",
+        title: 'Generating next round...',
         allowOutsideClick: false,
         didOpen: () => {
           Swal.showLoading();
-        },
+        }
       });
-
+      
       // Clear previous matches
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
       updatedBracketData.courts.forEach((court) => {
         court.matches = [];
       });
-
+      
       // Generate matches based on format
       await this.generateMexicanoMatches(updatedBracketData);
-
+      
       // Update round
       updatedBracketData.currentRound++;
-
+      
       // Save updated bracket data
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
         updatedBracketData
       );
-
+      
       // Hide registered players
       if (this.registeredPlayersContainer) {
-        this.registeredPlayersContainer.style.display = "none";
+        this.registeredPlayersContainer.style.display = 'none';
       }
-
+      
       Swal.close();
-
+      
       // Reset timer
       this.gameTimer.reset();
     } catch (error) {
       Swal.close();
-      console.error("Error generating next round:", error);
+      console.error('Error generating next round:', error);
       Swal.fire({
-        title: "Error",
-        text: "Failed to generate next round. Please try again.",
-        icon: "error",
+        title: 'Error',
+        text: 'Failed to generate next round. Please try again.',
+        icon: 'error'
       });
     }
   }
@@ -819,247 +591,84 @@ class TournamentBracketMexicano {
       }
     });
   }
-
+  
   async generateSubsequentRound(bracketData) {
-    console.log("===== ALUSTAME UUESTI JÄRGMISE RINGI GENEREERIMIST =====");
     this.playerAssignments.clear();
 
-    // 1. SAMM: Arvuta GameScore'id kõigile mängijatele
-    const playerGameScores = new Map();
     const previousMatches = bracketData.completedMatches.filter(
       (m) => m.round === bracketData.currentRound
     );
 
     previousMatches.forEach((match) => {
-      match.team1.forEach((player) => {
-        const gameScore =
-          match.score1 * 100 + (player.ranking || player.rating || 0);
-        playerGameScores.set(player.id, gameScore);
-      });
+      const { score1, score2, courtName, team1, team2 } = match;
 
-      match.team2.forEach((player) => {
-        const gameScore =
-          match.score2 * 100 + (player.ranking || player.rating || 0);
-        playerGameScores.set(player.id, gameScore);
-      });
-    });
+      if (score1 !== score2) {
+        const [winningTeam, losingTeam] =
+          score1 > score2 ? [team1, team2] : [team2, team1];
 
-    console.log(
-      "GameScore'id arvutatud:",
-      [...playerGameScores.entries()]
-        .map(
-          ([id, score]) =>
-            `${this.players.find((p) => p.id === id)?.name}: ${score}`
-        )
-        .join(", ")
-    );
-
-    // 2. SAMM: Töötle KÕIGEPEALT viigilised mängud
-    console.log("\n===== VIIKIDE TÖÖTLEMINE =====");
-    const viigilisedMängud = previousMatches.filter(
-      (m) => m.score1 === m.score2
-    );
-
-    viigilisedMängud.forEach((match) => {
-      console.log(
-        `VIIK väljakul ${match.courtName}: ${this.getTeamNames(match.team1)} (${
-          match.score1
-        }) vs ${this.getTeamNames(match.team2)} (${match.score2})`
-      );
-
-      // Tiim 1 võrdlus
-      const player1 = match.team1[0];
-      const player2 = match.team1[1];
-      const score1 = playerGameScores.get(player1.id);
-      const score2 = playerGameScores.get(player2.id);
-
-      console.log(
-        `  Tiim 1: ${player1.name} (${score1}) vs ${player2.name} (${score2})`
-      );
-      if (score1 > score2) {
-        this.playerAssignments.set(
-          player1.id,
-          this.determineNextCourt(match.courtName, "win")
+        winningTeam.forEach((player) =>
+          this.playerAssignments.set(player.id, this.determineNextCourt(courtName, 'win'))
         );
-        this.playerAssignments.set(
-          player2.id,
-          this.determineNextCourt(match.courtName, "loss")
-        );
-        console.log(
-          `    ${player1.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "win"
-          )}`
-        );
-        console.log(
-          `    ${player2.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "loss"
-          )}`
+
+        losingTeam.forEach((player) =>
+          this.playerAssignments.set(player.id, this.determineNextCourt(courtName, 'loss'))
         );
       } else {
-        this.playerAssignments.set(
-          player1.id,
-          this.determineNextCourt(match.courtName, "loss")
-        );
-        this.playerAssignments.set(
-          player2.id,
-          this.determineNextCourt(match.courtName, "win")
-        );
-        console.log(
-          `    ${player1.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "loss"
-          )}`
-        );
-        console.log(
-          `    ${player2.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "win"
-          )}`
-        );
-      }
+        const assignTieBreaker = (team, baseScore) => {
+          const [playerA, playerB] = team;
+          const scoreA = baseScore * 100 + playerA.rating;
+          const scoreB = baseScore * 100 + playerB.rating;
 
-      // Tiim 2 võrdlus
-      const player3 = match.team2[0];
-      const player4 = match.team2[1];
-      const score3 = playerGameScores.get(player3.id);
-      const score4 = playerGameScores.get(player4.id);
+          this.playerAssignments.set(
+            playerA.id,
+            this.determineNextCourt(courtName, scoreA > scoreB ? 'win' : 'loss')
+          );
+          this.playerAssignments.set(
+            playerB.id,
+            this.determineNextCourt(courtName, scoreA > scoreB ? 'loss' : 'win')
+          );
+        };
 
-      console.log(
-        `  Tiim 2: ${player3.name} (${score3}) vs ${player4.name} (${score4})`
-      );
-      if (score3 > score4) {
-        this.playerAssignments.set(
-          player3.id,
-          this.determineNextCourt(match.courtName, "win")
-        );
-        this.playerAssignments.set(
-          player4.id,
-          this.determineNextCourt(match.courtName, "loss")
-        );
-        console.log(
-          `    ${player3.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "win"
-          )}`
-        );
-        console.log(
-          `    ${player4.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "loss"
-          )}`
-        );
-      } else {
-        this.playerAssignments.set(
-          player3.id,
-          this.determineNextCourt(match.courtName, "loss")
-        );
-        this.playerAssignments.set(
-          player4.id,
-          this.determineNextCourt(match.courtName, "win")
-        );
-        console.log(
-          `    ${player3.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "loss"
-          )}`
-        );
-        console.log(
-          `    ${player4.name} -> ${this.determineNextCourt(
-            match.courtName,
-            "win"
-          )}`
-        );
+        assignTieBreaker(team1, score1);
+        assignTieBreaker(team2, score2);
       }
     });
-
-    // 3. SAMM: Töötle mitteviigilised mängud
-    console.log("\n===== VÕITUDE/KAOTUSTE TÖÖTLEMINE =====");
-    const tavalised = previousMatches.filter((m) => m.score1 !== m.score2);
-
-    tavalised.forEach((match) => {
-      const winner = match.score1 > match.score2 ? "team1" : "team2";
-      const loser = winner === "team1" ? "team2" : "team1";
-
-      console.log(
-        `Mäng väljakul ${match.courtName}: ${this.getTeamNames(
-          match[winner]
-        )} võitis ${this.getTeamNames(match[loser])}`
-      );
-
-      match[winner].forEach((player) => {
-        this.playerAssignments.set(
-          player.id,
-          this.determineNextCourt(match.courtName, "win")
-        );
-        console.log(
-          `  ${player.name} (võitja) -> ${this.determineNextCourt(
-            match.courtName,
-            "win"
-          )}`
-        );
-      });
-
-      match[loser].forEach((player) => {
-        this.playerAssignments.set(
-          player.id,
-          this.determineNextCourt(match.courtName, "loss")
-        );
-        console.log(
-          `  ${player.name} (kaotaja) -> ${this.determineNextCourt(
-            match.courtName,
-            "loss"
-          )}`
-        );
-      });
-    });
-
-    // 4. SAMM: Kontrolli väljakute mängijate nimekirju
-    console.log("\n===== LÕPLIKUD VÄLJAKUTE NIMEKIRJAD =====");
-    this.COURT_ORDER.forEach((court) => {
-      const courtPlayers = this.players.filter(
-        (p) => this.playerAssignments.get(p.id) === court
-      );
-      console.log(`${court}: ${courtPlayers.map((p) => p.name).join(", ")}`);
-    });
-
-    // 5. SAMM: Loo paarid igal väljakul
-    return this.createMatchesForRound(bracketData, playerGameScores);
+    
+    if (this.hasUnassignedPlayers()) {
+      return this.handleConflictResolution(bracketData);
+    } else {
+      return this.createMatchesForRound(bracketData);
+    }
   }
-
+  
   hasUnassignedPlayers() {
-    return this.players.some((p) => !this.playerAssignments.has(p.id));
+    return this.players.some(p => !this.playerAssignments.has(p.id));
   }
-
+  
   async handleConflictResolution(bracketData) {
     // This function would handle conflict resolution UI
     // For simplicity, we'll just auto-assign unassigned players
-    const unassignedPlayers = this.players.filter(
-      (p) => !this.playerAssignments.has(p.id)
-    );
-
+    const unassignedPlayers = this.players.filter(p => !this.playerAssignments.has(p.id));
+    
     // Distribute unassigned players to courts that need players
     const courtNeeds = new Map();
-    this.COURT_ORDER.forEach((court) => {
-      const assigned = this.players.filter(
-        (p) => this.playerAssignments.get(p.id) === court
-      );
+    this.COURT_ORDER.forEach(court => {
+      const assigned = this.players.filter(p => this.playerAssignments.get(p.id) === court);
       const needed = 4 - assigned.length;
       if (needed > 0) {
         courtNeeds.set(court, needed);
       }
     });
-
+    
     // Sort courts by need
     const sortedCourts = [...courtNeeds.entries()].sort((a, b) => b[1] - a[1]);
-
+    
     // Assign players to courts
-    unassignedPlayers.forEach((player) => {
+    unassignedPlayers.forEach(player => {
       if (sortedCourts.length > 0) {
         const [court, needed] = sortedCourts[0];
         this.playerAssignments.set(player.id, court);
-
+        
         if (needed === 1) {
           sortedCourts.shift(); // Remove this court from the list
         } else {
@@ -1069,123 +678,51 @@ class TournamentBracketMexicano {
         }
       }
     });
-
+    
     return this.createMatchesForRound(bracketData);
   }
 
   determineNextCourt(currentCourt, result) {
     const courtMovement = {
-      "Padel Arenas": {
-        win: "Padel Arenas",
-        loss: "Coolbet",
+      'Padel Arenas': {
+        win: 'Padel Arenas',
+        loss: 'Coolbet',
       },
       Coolbet: {
-        win: "Padel Arenas",
-        loss: "Lux Express",
+        win: 'Padel Arenas',
+        loss: 'Lux Express',
       },
-      "Lux Express": {
-        win: "Coolbet",
-        loss: "3p Logistics",
+      'Lux Express': {
+        win: 'Coolbet',
+        loss: '3p Logistics',
       },
-      "3p Logistics": {
-        win: "Lux Express",
-        loss: "3p Logistics",
+      '3p Logistics': {
+        win: 'Lux Express',
+        loss: '3p Logistics',
       },
     };
 
     return courtMovement[currentCourt][result];
   }
 
-  createMatchesForRound(bracketData, playerGameScores) {
-    // Logi ülevaade kõigist mängijatest väljakutel enne töötlemist
-    console.log("===== MÄNGIJAD IGAL VÄLJAKUL ENNE PAARIDE MOODUSTAMIST =====");
-    this.COURT_ORDER.forEach((court) => {
-      const courtPlayers = this.players.filter(
-        (p) => this.playerAssignments.get(p.id) === court
-      );
-      console.log(`${court}: ${courtPlayers.map((p) => p.name).join(", ")}`);
-    });
-
+  createMatchesForRound(bracketData) {
     this.COURT_ORDER.forEach((courtName, index) => {
-      console.log(`\n----- TÖÖTLEN VÄLJAKUT: ${courtName} -----`);
+      const courtPlayers = this.players
+        .filter((p) => this.playerAssignments.get(p.id) === courtName)
+        .sort((a, b) =>
+          PlayerSortUtils.byGameScore(
+            a,
+            b,
+            bracketData.completedMatches,
+            bracketData.currentRound
+          )
+        );
 
-      // Leia mängijad sellel väljakul
-      const courtPlayers = this.players.filter(
-        (p) => this.playerAssignments.get(p.id) === courtName
-      );
-      console.log(
-        `Leitud ${courtPlayers.length} mängijat: ${courtPlayers
-          .map((p) => p.name)
-          .join(", ")}`
-      );
-
-      // Kontrolli, kas väljakul on piisavalt mängijaid
       if (courtPlayers.length >= 4) {
-        // Logi enne sorteerimist
-        console.log(
-          "ENNE SORTEERIMIST:",
-          courtPlayers
-            .map(
-              (p) =>
-                `${p.name} (${playerGameScores?.get(p.id) || p.ranking || 0})`
-            )
-            .join(", ")
-        );
-
-        // Sorteeri mängijad GameScore'i järgi (kõrgeimast madalaimale)
-        courtPlayers.sort((a, b) => {
-          const aGameScore = playerGameScores?.get(a.id) || a.ranking || 0;
-          const bGameScore = playerGameScores?.get(b.id) || b.ranking || 0;
-          return bGameScore - aGameScore;
-        });
-
-        // Logi pärast sorteerimist
-        console.log(
-          "PÄRAST SORTEERIMIST:",
-          courtPlayers
-            .map(
-              (p, i) =>
-                `${i + 1}. ${p.name} (${
-                  playerGameScores?.get(p.id) || p.ranking || 0
-                })`
-            )
-            .join(", ")
-        );
-
-        // SNP sammud dokumendi kohaselt: 1&4 vs 2&3
-        const team1 = [courtPlayers[0], courtPlayers[3]]; // 1. ja 4. mängija
-        const team2 = [courtPlayers[1], courtPlayers[2]]; // 2. ja 3. mängija
-
-        console.log(`PAARID ${courtName}:`);
-        console.log(
-          `TEAM1: ${team1.map((p) => p.name).join(" & ")} (nr 1 & nr 4)`
-        );
-        console.log(
-          `TEAM2: ${team2.map((p) => p.name).join(" & ")} (nr 2 & nr 3)`
-        );
-
+        // Create teams by GameScore: highest with lowest, second highest with second lowest
+        const team1 = [courtPlayers[0], courtPlayers[3]];
+        const team2 = [courtPlayers[1], courtPlayers[2]];
         this.createMatch(bracketData, courtName, team1, team2, index);
-      } else {
-        console.warn(
-          `VIGA: Väljakul ${courtName} pole piisavalt mängijaid (${courtPlayers.length})`
-        );
-      }
-    });
-
-    // Logi ülevaade kõigist loodud paaridest
-    console.log("===== LOODUD PAARID =====");
-    this.COURT_ORDER.forEach((courtName) => {
-      const matches =
-        bracketData.courts.find((c) => c.name === courtName)?.matches || [];
-      const latestMatch = matches[matches.length - 1];
-      if (latestMatch) {
-        console.log(`${courtName}:`);
-        console.log(
-          `  TEAM1: ${latestMatch.team1.map((p) => p.name).join(" & ")}`
-        );
-        console.log(
-          `  TEAM2: ${latestMatch.team2.map((p) => p.name).join(" & ")}`
-        );
       }
     });
   }
@@ -1208,11 +745,11 @@ class TournamentBracketMexicano {
     try {
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-  
+      
       // Find the match
       let matchUpdated = false;
       let foundMatch = null;
-  
+
       // Look in current matches
       for (const court of updatedBracketData.courts) {
         const match = court.matches.find((m) => m.id === matchId);
@@ -1221,73 +758,66 @@ class TournamentBracketMexicano {
           break;
         }
       }
-  
+
       if (!foundMatch) {
-        throw new Error("Match not found");
+        throw new Error('Match not found');
       }
-  
+
       const currentScore = score !== null ? parseInt(score, 10) : null;
-      const otherScore =
-        scoreType === "score1" ? foundMatch.score2 : foundMatch.score1;
-  
+      const otherScore = scoreType === 'score1' ? foundMatch.score2 : foundMatch.score1;
+
       // Validate score if both scores are set
       if (currentScore !== null && otherScore !== null) {
-        if (
-          !ValidationUtils.isValidScore(
-            scoreType === "score1" ? currentScore : otherScore,
-            scoreType === "score2" ? currentScore : otherScore
-          )
-        ) {
+        if (!ValidationUtils.isValidScore(
+          scoreType === 'score1' ? currentScore : otherScore,
+          scoreType === 'score2' ? currentScore : otherScore
+        )) {
           Swal.fire({
-            title: "Invalid Score",
-            text: "Scores must be between 0-10.",
-            icon: "error",
+            title: 'Invalid Score',
+            text: 'Scores must be between 0-10.',
+            icon: 'error'
           });
           return;
         }
       }
-  
+
       // Update the score
       foundMatch[scoreType] = currentScore;
-  
+      
       // Check if match is completed
-      foundMatch.completed =
-        foundMatch.score1 !== null && foundMatch.score2 !== null;
-  
+      foundMatch.completed = foundMatch.score1 !== null && foundMatch.score2 !== null;
+      
       if (foundMatch.completed) {
         // Add to completed matches if not already there
-        const existingMatchIndex =
-          updatedBracketData.completedMatches.findIndex(
-            (m) => m.id === foundMatch.id
-          );
-  
+        const existingMatchIndex = updatedBracketData.completedMatches.findIndex(
+          (m) => m.id === foundMatch.id
+        );
+        
         if (existingMatchIndex !== -1) {
-          updatedBracketData.completedMatches[existingMatchIndex] = {
-            ...foundMatch,
-          };
+          updatedBracketData.completedMatches[existingMatchIndex] = { ...foundMatch };
         } else {
           updatedBracketData.completedMatches.push({ ...foundMatch });
         }
-  
+        
         matchUpdated = true;
       }
-  
+
       // Recalculate standings if needed
       if (matchUpdated) {
         this.recalculateStandings(updatedBracketData);
       }
-  
+      
       // Save updated bracket data
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
         updatedBracketData
       );
     } catch (error) {
-      console.error("Error updating match score:", error);
+      console.error('Error updating match score:', error);
       Swal.fire({
-        title: "Error",
-        text: "Failed to update match score. Please try again.",
-        icon: "error",
+        title: 'Error',
+        text: 'Failed to update match score. Please try again.',
+        icon: 'error'
       });
     }
   }
@@ -1330,65 +860,57 @@ class TournamentBracketMexicano {
 
   async handleScoreUpdate(element, input, matchId, scoreType, originalText) {
     const score = input.value ? parseInt(input.value) : null;
-  
+    
     try {
       // Update the score in the database
       await this.updateMatchScore(matchId, scoreType, score);
-  
+      
       // Remove input and show updated score with visual feedback
-      element.classList.remove("editing");
-      element.classList.add("score-updated");
-      element.textContent = score ?? "-";
-  
+      element.classList.remove('editing');
+      element.classList.add('score-updated');
+      element.textContent = score ?? '-';
+      
       // Remove the visual feedback after a short delay
       setTimeout(() => {
-        element.classList.remove("score-updated");
+        element.classList.remove('score-updated');
       }, 1500);
-      
-      return true; // Return successful result
     } catch (error) {
-      console.error("Error updating score:", error);
-  
+      console.error('Error updating score:', error);
+      
       // On error, restore original value
-      element.classList.remove("editing");
+      element.classList.remove('editing');
       element.textContent = originalText;
-  
+      
       // Show error message
       Swal.fire({
-        title: "Error",
-        text: "Failed to update score",
-        icon: "error",
-        timer: 2000,
+        title: 'Error',
+        text: 'Failed to update score',
+        icon: 'error',
+        timer: 2000
       });
-      
-      return false; // Return failed result
     }
   }
 
   renderMatches() {
     if (!this.currentMatches || !this.bracketData) return;
-
-    this.currentMatches.innerHTML = "";
-
+    
+    this.currentMatches.innerHTML = '';
+  
     this.bracketData.courts.forEach((court) => {
       court.matches.forEach((match) => {
         if (!match.completed) {
-          const matchElement = document.createElement("div");
-          matchElement.className = "match";
+          const matchElement = document.createElement('div');
+          matchElement.className = 'match';
           matchElement.innerHTML = `
             <div class="match-info">
               <span class="court-name">${court.name}</span>
               <div class="team">
                 <span class="team-name">${this.getTeamNames(match.team1)}</span>
-                <span class="score" onclick="makeScoreEditable(this, '${
-                  match.id
-                }', 'score1')">${match.score1 ?? "-"}</span>
+                <span class="score" onclick="makeScoreEditable(this, '${match.id}', 'score1')">${match.score1 ?? '-'}</span>
               </div>
               <div class="team">
                 <span class="team-name">${this.getTeamNames(match.team2)}</span>
-                <span class="score" onclick="makeScoreEditable(this, '${
-                  match.id
-                }', 'score2')">${match.score2 ?? "-"}</span>
+                <span class="score" onclick="makeScoreEditable(this, '${match.id}', 'score2')">${match.score2 ?? '-'}</span>
               </div>
             </div>
           `;
@@ -1396,22 +918,20 @@ class TournamentBracketMexicano {
         }
       });
     });
-
+    
     // If no matches are found, show a message
     if (this.currentMatches.children.length === 0) {
       this.currentMatches.innerHTML = `
         <div class="no-matches-message">
           <p>No active matches found for this round.</p>
-          <button class="btn-primary" id="generateRoundBtn">Generate Matches for Round ${
-            this.bracketData.currentRound + 1
-          }</button>
+          <button class="btn-primary" id="generateRoundBtn">Generate Matches for Round ${this.bracketData.currentRound + 1}</button>
         </div>
       `;
-
+      
       // Add event listener to the generate button
-      const generateBtn = document.getElementById("generateRoundBtn");
+      const generateBtn = document.getElementById('generateRoundBtn');
       if (generateBtn) {
-        generateBtn.addEventListener("click", () => this.generateNextRound());
+        generateBtn.addEventListener('click', () => this.generateNextRound());
       }
     }
   }
@@ -1419,23 +939,22 @@ class TournamentBracketMexicano {
   renderStandings() {
     if (!this.standings || !this.bracketData?.standings?.length) {
       if (this.standings) {
-        this.standings.innerHTML =
-          '<div class="empty-standings">No standings available</div>';
+        this.standings.innerHTML = '<div class="empty-standings">No standings available</div>';
       }
       return;
     }
 
-    this.standings.innerHTML = "";
+    this.standings.innerHTML = '';
 
     const sortedStandings = [...this.bracketData.standings].sort((a, b) => {
       const pointsDiff = (b.points || 0) - (a.points || 0);
       if (pointsDiff !== 0) return pointsDiff;
       return (b.wins || 0) - (a.wins || 0);
     });
-
+    
     sortedStandings.forEach((player, index) => {
-      const standingElement = document.createElement("div");
-      standingElement.className = "standing-item";
+      const standingElement = document.createElement('div');
+      standingElement.className = 'standing-item';
       standingElement.innerHTML = `
         <span class="rank">#${index + 1}</span>
         <span class="team-name">${player.name}</span>
@@ -1448,12 +967,10 @@ class TournamentBracketMexicano {
 
   renderRegisteredPlayers() {
     if (!this.playersGrid) return;
+    
+    this.playersGrid.innerHTML = '';
 
-    this.playersGrid.innerHTML = "";
-
-    const sortedPlayers = [...this.players].sort(
-      (a, b) => b.ranking - a.ranking
-    );
+    const sortedPlayers = [...this.players].sort((a, b) => b.ranking - a.ranking);
     const numColumns = 4;
     const numRows = Math.ceil(this.players.length / numColumns);
 
@@ -1465,12 +982,12 @@ class TournamentBracketMexicano {
     });
 
     columns.forEach((column) => {
-      const columnDiv = document.createElement("div");
-      columnDiv.className = "player-column";
+      const columnDiv = document.createElement('div');
+      columnDiv.className = 'player-column';
 
       column.forEach((player) => {
-        const playerCard = document.createElement("div");
-        playerCard.className = "player-card";
+        const playerCard = document.createElement('div');
+        playerCard.className = 'player-card';
         playerCard.innerHTML = `
           <div class="player-info">
             <span class="player-name">${player.name}</span>
@@ -1486,24 +1003,24 @@ class TournamentBracketMexicano {
 
   renderGameScores() {
     // First remove existing table if any
-    const existingTable = document.querySelector(".game-score-table");
+    const existingTable = document.querySelector('.game-score-table');
     if (existingTable) {
       existingTable.remove();
     }
 
     if (!this.bracketData || !this.standings) return;
 
-    const gameScoreTable = document.createElement("div");
-    gameScoreTable.className = "game-score-table";
+    const gameScoreTable = document.createElement('div');
+    gameScoreTable.className = 'game-score-table';
 
     // Header
-    const header = document.createElement("h3");
-    header.textContent = "GameScore Tracking";
+    const header = document.createElement('h3');
+    header.textContent = 'GameScore Tracking';
     gameScoreTable.appendChild(header);
 
     // Create scores grid
-    const scoreGrid = document.createElement("div");
-    scoreGrid.className = "score-grid";
+    const scoreGrid = document.createElement('div');
+    scoreGrid.className = 'score-grid';
 
     this.players.forEach((player) => {
       const matchPoints = this.bracketData.completedMatches
@@ -1522,8 +1039,8 @@ class TournamentBracketMexicano {
         gameScore = score * 100 + player.ranking;
       }
 
-      const scoreRow = document.createElement("div");
-      scoreRow.className = "score-row";
+      const scoreRow = document.createElement('div');
+      scoreRow.className = 'score-row';
       scoreRow.innerHTML = `
         <span class="player-name">${player.name}</span>
         <span class="game-score">${gameScore}</span>
@@ -1535,16 +1052,13 @@ class TournamentBracketMexicano {
 
     // Add the table after standings
     if (this.standings) {
-      this.standings.parentNode.insertBefore(
-        gameScoreTable,
-        this.standings.nextSibling
-      );
+      this.standings.parentNode.insertBefore(gameScoreTable, this.standings.nextSibling);
     }
   }
 
   checkRoundCompletion() {
     if (!this.bracketData) return;
-
+    
     const allMatchesCompleted = this.bracketData.courts.every((court) =>
       court.matches.every((m) => m.completed)
     );
@@ -1555,254 +1069,59 @@ class TournamentBracketMexicano {
   }
 
   showTournamentEndOption() {
-    if (!document.getElementById("endTournament")) {
-      const endTournamentBtn = document.createElement("button");
-      endTournamentBtn.id = "endTournament";
-      endTournamentBtn.className = "btn-primary";
-      endTournamentBtn.textContent = "End Tournament";
+    if (!document.getElementById('endTournament')) {
+      const endTournamentBtn = document.createElement('button');
+      endTournamentBtn.id = 'endTournament';
+      endTournamentBtn.className = 'btn-primary';
+      endTournamentBtn.textContent = 'End Tournament';
       endTournamentBtn.onclick = () => this.endTournament();
-
+      
       if (this.generateBtn) {
         this.generateBtn.disabled = true;
       }
-
+      
       if (this.resetRoundBtn) {
         this.resetRoundBtn.disabled = true;
       }
-
+      
       if (this.startTimerBtn) {
         this.startTimerBtn.disabled = true;
       }
-
+      
       document.querySelector('.control-buttons')?.appendChild(endTournamentBtn);
-    }
-  }
-
-  async recordTournamentResultsForPlayers() {
-    if (!this.bracketData || !this.bracketData.standings) return;
-    
-    try {
-      // Kui turniir pole lõpetatud, ära jätka
-      if (!this.tournament || this.tournament.status_id !== 3) {
-        console.log('Not recording tournament results - tournament not completed yet');
-        return;
-      }
-      
-      console.log("Recording tournament results for players...");
-      
-      // Kui playerProfileService pole saadaval, siis loome asendaja
-      if (!window.playerProfileService) {
-        console.log("Creating fallback playerProfileService");
-        window.playerProfileService = {
-          addTournamentToPlayer: async function(playerId, tournamentData) {
-            console.log(`Would record tournament for player ${playerId}:`, tournamentData);
-            return true;
-          },
-          addRatingHistoryEntry: async function(playerId, rating) {
-            console.log(`Would update rating for player ${playerId}:`, rating);
-            return true;
-          },
-          addGroupHistoryEntry: async function(playerId, group) {
-            console.log(`Would update group for player ${playerId}:`, group);
-            return true;
-          },
-          addMatchToPlayer: async function(playerId, matchData) {
-            console.log(`Would record match for player ${playerId}:`, matchData);
-            return true;
-          }
-        };
-      }
-      
-      // Kontrolli, kas vajalikud funktsioonid on olemas
-      const serviceAvailable = window.playerProfileService && 
-                              typeof window.playerProfileService.addTournamentToPlayer === 'function';
-      
-      if (!serviceAvailable) {
-        console.warn("PlayerProfileService not properly set up. Using console logging instead.");
-        // Kui teenus pole saadaval, logi lihtsalt konsooli
-        return;
-      }
-      
-      // Arvuta mängijate arv
-      const totalPlayers = this.bracketData.standings.length;
-      
-      // Formateeri turniiri andmed
-      const tournamentData = {
-        id: this.selectedTournamentId,
-        name: this.tournament?.name || 'Tournament',
-        date: new Date().toISOString(),
-        format: this.tournament?.format,
-        totalPlayers: totalPlayers
-      };
-      
-      // Salvesta tulemused mängijatele
-      for (const standing of this.bracketData.standings) {
-        if (!standing || !standing.id) continue;
-        
-        try {
-          // Arvuta võidetud/kaotatud mängud
-          let gamesWon = 0;
-          let gamesLost = 0;
-          
-          // Leia mängija mängud
-          const playerMatches = this.bracketData.completedMatches.filter(match => 
-            match.team1.some(p => p.id === standing.id) || 
-            match.team2.some(p => p.id === standing.id)
-          );
-          
-          playerMatches.forEach(match => {
-            const inTeam1 = match.team1.some(p => p.id === standing.id);
-            if (inTeam1) {
-              gamesWon += match.score1 || 0;
-              gamesLost += match.score2 || 0;
-            } else {
-              gamesWon += match.score2 || 0;
-              gamesLost += match.score1 || 0;
-            }
-          });
-          
-          // Loo mängijaspetsiifiline turniiri kirje
-          const playerTournamentData = {
-            ...tournamentData,
-            position: standing.finalRank || this.bracketData.standings.findIndex(s => s.id === standing.id) + 1,
-            points: standing.points || 0,
-            gamesWon: gamesWon,
-            gamesLost: gamesLost,
-            wins: standing.wins || 0,
-            losses: standing.losses || 0,
-            group: this.getPlayerGroup(standing.id)
-          };
-          
-          // Salvesta turniir mängija profiili
-          try {
-            await window.playerProfileService.addTournamentToPlayer(standing.id, playerTournamentData);
-            console.log(`Recorded tournament results for player ${standing.name}`);
-          } catch (err) {
-            console.warn(`Failed to record tournament for player ${standing.name}:`, err);
-          }
-          
-        } catch (err) {
-          console.warn(`Error processing player ${standing.name}:`, err);
-        }
-      }
-      
-      console.log("Tournament results recording completed successfully!");
-    } catch (error) {
-      console.error('Error recording tournament results for players:', error);
-      // Ei viska edasi - turniiri sulgemisprotsess pole häiritud
-    }
-  }
-
-
-  async recordTournamentResultsForPlayers() {
-    if (!this.bracketData || !this.bracketData.standings) return;
-    
-    try {
-      // Get player profile service
-      const playerProfileService = window.playerProfileService;
-      if (!playerProfileService) {
-        console.warn('Player profile service not available, tournament results not recorded');
-        return;
-      }
-      
-      // Calculate total players
-      const totalPlayers = this.bracketData.standings.length;
-      
-      // Format the tournament data
-      const tournamentData = {
-        id: this.selectedTournamentId,
-        name: this.tournament?.name || 'Tournament',
-        date: new Date().toISOString(),
-        format: this.tournament?.format,
-        totalPlayers: totalPlayers
-      };
-      
-      // Record tournament results for each player
-      for (const standing of this.bracketData.standings) {
-        // Skip if no valid player data
-        if (!standing || !standing.id) continue;
-        
-        // Get all matches for this player
-        const playerMatches = this.bracketData.completedMatches.filter(match => 
-          match.team1.some(p => p.id === standing.id) || 
-          match.team2.some(p => p.id === standing.id)
-        );
-        
-        // Calculate games won/lost
-        let gamesWon = 0;
-        let gamesLost = 0;
-        
-        playerMatches.forEach(match => {
-          const inTeam1 = match.team1.some(p => p.id === standing.id);
-          if (inTeam1) {
-            gamesWon += match.score1 || 0;
-            gamesLost += match.score2 || 0;
-          } else {
-            gamesWon += match.score2 || 0;
-            gamesLost += match.score1 || 0;
-          }
-        });
-        
-        // Create player-specific tournament record
-        const playerTournamentData = {
-          ...tournamentData,
-          position: standing.finalRank || this.bracketData.standings.findIndex(s => s.id === standing.id) + 1,
-          points: standing.points || 0,
-          gamesWon: gamesWon,
-          gamesLost: gamesLost,
-          wins: standing.wins || 0,
-          losses: standing.losses || 0,
-          group: this.getPlayerGroup(standing.id)
-        };
-        
-        // Save tournament to player profile
-        await playerProfileService.addTournamentToPlayer(standing.id, playerTournamentData);
-        console.log(`Recorded tournament results for player ${standing.name}`);
-        
-        // Update player rating if needed
-        if (standing.rating !== undefined) {
-          await playerProfileService.addRatingHistoryEntry(standing.id, standing.rating);
-        }
-        
-        // Update player group history if needed
-        const group = this.getPlayerGroup(standing.id);
-        if (group) {
-          await playerProfileService.addGroupHistoryEntry(standing.id, group);
-        }
-      }
-    } catch (error) {
-      console.error('Error recording tournament results for players:', error);
-      // Don't throw - we don't want to stop the tournament flow if profile updates fail
     }
   }
 
   async endTournament() {
     const result = await Swal.fire({
-      title: "Are you sure?",
-      text: "This will finalize all standings and complete the tournament.",
-      icon: "warning",
+      title: 'Are you sure?',
+      text: 'This will finalize all standings and complete the tournament.',
+      icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: "Yes, end it!",
-      cancelButtonText: "No, keep it",
+      confirmButtonText: 'Yes, end it!',
+      cancelButtonText: 'No, keep it',
     });
-  
+    
     if (!result.isConfirmed) return;
-  
+    
     try {
       Swal.fire({
-        title: "Finalizing tournament...",
+        title: 'Finalizing tournament...',
         allowOutsideClick: false,
         didOpen: () => {
           Swal.showLoading();
-        },
+        }
       });
-  
+      
       // Update tournament status to completed
-      await firebaseService.updateTournament(this.selectedTournamentId, {
-        status_id: 3, // 3 = completed
-        completedDate: new Date().toISOString(),
-      });
-  
+      await firebaseService.updateTournament(
+        this.selectedTournamentId,
+        { 
+          status_id: 3, // 3 = completed
+          completedDate: new Date().toISOString()
+        }
+      );
+      
       // Add final standings to tournament data
       const finalStandings = this.bracketData.standings
         .sort((a, b) => b.points - a.points || b.wins - a.wins)
@@ -1810,82 +1129,43 @@ class TournamentBracketMexicano {
           ...player,
           finalRank: index + 1,
         }));
-  
+      
       // Update bracket data with final results
       const updatedBracketData = {
         ...this.bracketData,
         completed: true,
-        finalStandings,
+        finalStandings
       };
-  
+      
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
         updatedBracketData
       );
       
-      // Salvesta tulemused mängijatele
-      try {
-        await this.recordTournamentResultsForPlayers();
-      } catch (statisticsError) {
-        console.warn("Failed to record player statistics:", statisticsError);
-      }
-  
       Swal.close();
-  
+      
       await Swal.fire({
-        title: "Tournament Completed!",
-        text: "Final standings have been saved.",
-        icon: "success",
+        title: 'Tournament Completed!',
+        text: 'Final standings have been saved.',
+        icon: 'success'
       });
-  
-      // Redirect to tournament stats
-      setTimeout(() => {
-        window.location.href = "tournament-stats.html";
-      }, 2000);
+      
+      // Disable all controls
+      if (document.getElementById('endTournament')) {
+        document.getElementById('endTournament').disabled = true;
+      }
+      
+      // Redirect to tournament list
+      window.location.href = 'tournament-list.html';
     } catch (error) {
       Swal.close();
-      console.error("Error ending tournament:", error);
+      console.error('Error ending tournament:', error);
       Swal.fire({
-        title: "Error",
-        text: "Failed to end tournament. Please try again.",
-        icon: "error",
+        title: 'Error',
+        text: 'Failed to end tournament. Please try again.',
+        icon: 'error'
       });
     }
-  }
-
-  getPlayerGroup(playerId) {
-    // Find player in the players list
-    const player = this.players.find(p => p.id === playerId);
-    if (player && player.group) {
-      return player.group;
-    }
-    
-    // If no group found in player object, try to determine from bracket data
-    if (this.bracketData.format === 'Americano' && this.bracketData.rounds && this.bracketData.rounds.length > 0) {
-      // Get the first match in round 1 that includes this player
-      const round1 = this.bracketData.rounds[0];
-      for (const match of round1.matches) {
-        if (match.team1.some(p => p.id === playerId) || match.team2.some(p => p.id === playerId)) {
-          return match.groupColor;
-        }
-      }
-    } else if (this.bracketData.courts) {
-      // For Mexicano format, check which court the player started on
-      for (let i = 0; i < this.bracketData.courts.length; i++) {
-        const court = this.bracketData.courts[i];
-        if (court.matches && court.matches.length > 0) {
-          const match = court.matches[0]; // First match on this court
-          if (match.team1.some(p => p.id === playerId) || match.team2.some(p => p.id === playerId)) {
-            // Convert court index to group color
-            const groupColors = ['green', 'blue', 'yellow', 'pink'];
-            return groupColors[i] || 'hot';
-          }
-        }
-      }
-    }
-    
-    // Default group if nothing found
-    return 'hot';
   }
 
   async resetCurrentRound() {
@@ -1894,28 +1174,28 @@ class TournamentBracketMexicano {
     }
 
     const result = await Swal.fire({
-      title: "Reset Current Round?",
-      text: "Are you sure you want to reset the current round? This will clear all match scores and standings for this round.",
-      icon: "warning",
+      title: 'Reset Current Round?',
+      text: 'Are you sure you want to reset the current round? This will clear all match scores and standings for this round.',
+      icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: "Yes, reset it!",
-      cancelButtonText: "Cancel",
+      confirmButtonText: 'Yes, reset it!',
+      cancelButtonText: 'Cancel'
     });
 
     if (!result.isConfirmed) return;
 
     try {
       Swal.fire({
-        title: "Resetting round...",
+        title: 'Resetting round...',
         allowOutsideClick: false,
         didOpen: () => {
           Swal.showLoading();
-        },
+        }
       });
-
+      
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-
+      
       // Clear current matches
       updatedBracketData.courts.forEach((court) => {
         court.matches = [];
@@ -1923,58 +1203,54 @@ class TournamentBracketMexicano {
 
       // Remove completed matches for this round
       if (updatedBracketData.completedMatches) {
-        updatedBracketData.completedMatches =
-          updatedBracketData.completedMatches.filter(
-            (match) => match.round !== updatedBracketData.currentRound
-          );
+        updatedBracketData.completedMatches = updatedBracketData.completedMatches.filter(
+          (match) => match.round !== updatedBracketData.currentRound
+        );
       }
 
       // Decrement round counter
       updatedBracketData.currentRound--;
-
+      
       // Show registered players if going back to round 0
-      if (
-        updatedBracketData.currentRound === 0 &&
-        this.registeredPlayersContainer
-      ) {
-        this.registeredPlayersContainer.style.display = "block";
+      if (updatedBracketData.currentRound === 0 && this.registeredPlayersContainer) {
+        this.registeredPlayersContainer.style.display = 'block';
       }
 
       // Recalculate standings
       this.recalculateStandings(updatedBracketData);
-
+      
       // Save updated bracket data
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
         updatedBracketData
       );
-
+      
       Swal.close();
-
+      
       // Reset timer
       this.gameTimer.reset();
-
+      
       await Swal.fire({
-        title: "Round Reset",
-        text: "The current round has been reset successfully.",
-        icon: "success",
-        timer: 1500,
+        title: 'Round Reset',
+        text: 'The current round has been reset successfully.',
+        icon: 'success',
+        timer: 1500
       });
     } catch (error) {
       Swal.close();
-      console.error("Error resetting round:", error);
+      console.error('Error resetting round:', error);
       Swal.fire({
-        title: "Error",
-        text: "Failed to reset round. Please try again.",
-        icon: "error",
+        title: 'Error',
+        text: 'Failed to reset round. Please try again.',
+        icon: 'error'
       });
     }
-  }
-  catch(error) {}
-}
-
-document.addEventListener("DOMContentLoaded", () => {
+  } catch (error) {}}
+  
+document.addEventListener('DOMContentLoaded', () => {
   new TournamentBracketMexicano();
 });
+
+
 
 export default TournamentBracketMexicano;
