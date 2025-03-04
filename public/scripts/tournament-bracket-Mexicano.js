@@ -1311,10 +1311,6 @@ if (foundMatch.completed) {
   await this.recordMatchResultForPlayers(foundMatch);
 }
 
-if (match.score1 !== null && match.score2 !== null) {
-  match.completed = true;
-  await this.recordMatchResultForPlayers(match);
-}
 
       // Save updated bracket data
       await firebaseService.saveTournamentBracket(
