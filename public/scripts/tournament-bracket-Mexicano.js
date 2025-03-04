@@ -1,5 +1,6 @@
 import firebaseService from "./services/firebase-service";
 import { routingService } from "./services/routing-service";
+import playerProfileService from './services/player-profile-service';
 
 // Import utility modules
 import {
@@ -8,7 +9,6 @@ import {
   ConflictUtils,
   GameScoreUtils,
 } from './utils.js';
-import playerProfileService from './services/player-profile-service';
 
 /**
  * Tournament Bracket Mexicano class
@@ -1582,9 +1582,15 @@ class TournamentBracketMexicano {
     if (!this.bracketData || !this.bracketData.standings) return;
     
     try {
+      // Kui turniir pole lõpetatud, ära jätka
+      if (!this.tournament || this.tournament.status_id !== 3) {
+        console.log('Not recording tournament results - tournament not completed yet');
+        return;
+      }
+      
       console.log("Recording tournament results for players...");
       
-      // Kui playerProfileService pole saadaval, siis loome lihtsa asendaja
+      // Kui playerProfileService pole saadaval, siis loome asendaja
       if (!window.playerProfileService) {
         console.log("Creating fallback playerProfileService");
         window.playerProfileService = {
@@ -1613,22 +1619,14 @@ class TournamentBracketMexicano {
       
       if (!serviceAvailable) {
         console.warn("PlayerProfileService not properly set up. Using console logging instead.");
-        
-        // Kui funktsioonid pole saadaval, siis logime lihtsalt konsooli
-        for (const standing of this.bracketData.standings) {
-          console.log(`Would record tournament result for player: ${standing.name} (${standing.id})`);
-          console.log(`  Final position: ${standing.finalRank || '?'}`);
-          console.log(`  Points: ${standing.points || 0}`);
-          console.log(`  Record: ${standing.wins || 0}-${standing.losses || 0}`);
-        }
-        
+        // Kui teenus pole saadaval, logi lihtsalt konsooli
         return;
       }
       
-      // Calculate total players
+      // Arvuta mängijate arv
       const totalPlayers = this.bracketData.standings.length;
       
-      // Format the tournament data
+      // Formateeri turniiri andmed
       const tournamentData = {
         id: this.selectedTournamentId,
         name: this.tournament?.name || 'Tournament',
@@ -1637,46 +1635,45 @@ class TournamentBracketMexicano {
         totalPlayers: totalPlayers
       };
       
-      // Salvesta turniiri tulemused kõikidele mängijatele
+      // Salvesta tulemused mängijatele
       for (const standing of this.bracketData.standings) {
-        // Skip if no valid player data
         if (!standing || !standing.id) continue;
         
-        // Calculate games won/lost
-        let gamesWon = 0;
-        let gamesLost = 0;
-        
-        // Leia kõik selle mängija mängud
-        const playerMatches = this.bracketData.completedMatches.filter(match => 
-          match.team1.some(p => p.id === standing.id) || 
-          match.team2.some(p => p.id === standing.id)
-        );
-        
-        playerMatches.forEach(match => {
-          const inTeam1 = match.team1.some(p => p.id === standing.id);
-          if (inTeam1) {
-            gamesWon += match.score1 || 0;
-            gamesLost += match.score2 || 0;
-          } else {
-            gamesWon += match.score2 || 0;
-            gamesLost += match.score1 || 0;
-          }
-        });
-        
-        // Create player-specific tournament record
-        const playerTournamentData = {
-          ...tournamentData,
-          position: standing.finalRank || this.bracketData.standings.findIndex(s => s.id === standing.id) + 1,
-          points: standing.points || 0,
-          gamesWon: gamesWon,
-          gamesLost: gamesLost,
-          wins: standing.wins || 0,
-          losses: standing.losses || 0,
-          group: this.getPlayerGroup(standing.id)
-        };
-        
         try {
-          // Save tournament to player profile - use try-catch every method call
+          // Arvuta võidetud/kaotatud mängud
+          let gamesWon = 0;
+          let gamesLost = 0;
+          
+          // Leia mängija mängud
+          const playerMatches = this.bracketData.completedMatches.filter(match => 
+            match.team1.some(p => p.id === standing.id) || 
+            match.team2.some(p => p.id === standing.id)
+          );
+          
+          playerMatches.forEach(match => {
+            const inTeam1 = match.team1.some(p => p.id === standing.id);
+            if (inTeam1) {
+              gamesWon += match.score1 || 0;
+              gamesLost += match.score2 || 0;
+            } else {
+              gamesWon += match.score2 || 0;
+              gamesLost += match.score1 || 0;
+            }
+          });
+          
+          // Loo mängijaspetsiifiline turniiri kirje
+          const playerTournamentData = {
+            ...tournamentData,
+            position: standing.finalRank || this.bracketData.standings.findIndex(s => s.id === standing.id) + 1,
+            points: standing.points || 0,
+            gamesWon: gamesWon,
+            gamesLost: gamesLost,
+            wins: standing.wins || 0,
+            losses: standing.losses || 0,
+            group: this.getPlayerGroup(standing.id)
+          };
+          
+          // Salvesta turniir mängija profiili
           try {
             await window.playerProfileService.addTournamentToPlayer(standing.id, playerTournamentData);
             console.log(`Recorded tournament results for player ${standing.name}`);
@@ -1684,24 +1681,6 @@ class TournamentBracketMexicano {
             console.warn(`Failed to record tournament for player ${standing.name}:`, err);
           }
           
-          // Update player rating if needed
-          if (standing.rating !== undefined) {
-            try {
-              await window.playerProfileService.addRatingHistoryEntry(standing.id, standing.rating);
-            } catch (err) {
-              console.warn(`Failed to update rating for player ${standing.name}:`, err);
-            }
-          }
-          
-          // Update player group history if needed
-          const group = this.getPlayerGroup(standing.id);
-          if (group) {
-            try {
-              await window.playerProfileService.addGroupHistoryEntry(standing.id, group);
-            } catch (err) {
-              console.warn(`Failed to update group for player ${standing.name}:`, err);
-            }
-          }
         } catch (err) {
           console.warn(`Error processing player ${standing.name}:`, err);
         }
@@ -1710,9 +1689,10 @@ class TournamentBracketMexicano {
       console.log("Tournament results recording completed successfully!");
     } catch (error) {
       console.error('Error recording tournament results for players:', error);
-      // Ei viska viga edasi - me ei taha turniiri sulgemisprotsessi peatada
+      // Ei viska edasi - turniiri sulgemisprotsess pole häiritud
     }
   }
+
 
   async recordTournamentResultsForPlayers() {
     if (!this.bracketData || !this.bracketData.standings) return;
@@ -1817,36 +1797,13 @@ class TournamentBracketMexicano {
         },
       });
   
-      // Veendume, et meil on tagavarasüsteem, kui päris teenus pole saadaval
-      if (!window.playerProfileService) {
-        console.log("Setting up fallback playerProfileService");
-        window.playerProfileService = {
-          addTournamentToPlayer: async function(playerId, tournamentData) {
-            console.log(`Recording tournament for player ${playerId}:`, tournamentData);
-            return true;
-          },
-          addRatingHistoryEntry: async function(playerId, rating) {
-            console.log(`Updating rating for player ${playerId}: ${rating}`);
-            return true;
-          },
-          addGroupHistoryEntry: async function(playerId, group) {
-            console.log(`Updating group for player ${playerId}: ${group}`);
-            return true;
-          },
-          addMatchToPlayer: async function(playerId, matchData) {
-            console.log(`Recording match for player ${playerId}:`, matchData);
-            return true;
-          }
-        };
-      }
-  
       // Update tournament status to completed
       await firebaseService.updateTournament(this.selectedTournamentId, {
         status_id: 3, // 3 = completed
         completedDate: new Date().toISOString(),
       });
   
-      // Add final standings to tournament data with rankings
+      // Add final standings to tournament data
       const finalStandings = this.bracketData.standings
         .sort((a, b) => b.points - a.points || b.wins - a.wins)
         .map((player, index) => ({
@@ -1865,17 +1822,12 @@ class TournamentBracketMexicano {
         this.selectedTournamentId,
         updatedBracketData
       );
-  
-      // Proovi salvestada turniiri tulemused mängijatele
-      // Teeme selle välistatult eraldi try-catch plokis
+      
+      // Salvesta tulemused mängijatele
       try {
-        if (updatedBracketData.completedMatches && updatedBracketData.completedMatches.length > 0) {
-          console.log(`Recording results for ${updatedBracketData.completedMatches.length} matches...`);
-          await this.recordTournamentResultsForPlayers();
-        }
+        await this.recordTournamentResultsForPlayers();
       } catch (statisticsError) {
         console.warn("Failed to record player statistics:", statisticsError);
-        // Jätkame turniiri sulgemist isegi kui statistika salvestamine ebaõnnestus
       }
   
       Swal.close();
@@ -1886,15 +1838,9 @@ class TournamentBracketMexicano {
         icon: "success",
       });
   
-      // Disable all controls
-      const endTournamentBtn = document.getElementById("endTournament");
-      if (endTournamentBtn) {
-        endTournamentBtn.disabled = true;
-      }
-  
-      // Redirect to tournament list after short delay
+      // Redirect to tournament stats
       setTimeout(() => {
-        window.location.href = "tournament-list.html";
+        window.location.href = "tournament-stats.html";
       }, 2000);
     } catch (error) {
       Swal.close();
