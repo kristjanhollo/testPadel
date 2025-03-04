@@ -69,6 +69,8 @@ class PlayerProfile {
         console.error('Firebase service is not available');
         throw new Error('Firebase service not found. Please check your setup.');
       }
+
+  
       
       // Show loading indicator
       if (isProfilePage) {
@@ -603,7 +605,6 @@ class PlayerProfile {
         rating: Math.max(1, Math.min(40, rating)).toFixed(1)
       });
     }
-    
     return history;
   }
 }

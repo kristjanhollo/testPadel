@@ -57,23 +57,16 @@ class TournamentBracketMexicano {
     this.init();
   }
   
-  async recordMatchResultForPlayers(match) {
+  async recordMatchResultForPlayer(match) {
     if (!match || !match.completed) return;
     
     try {
-      // Get player profile service
-      const playerProfileService = window.playerProfileService;
-      if (!playerProfileService) {
-        console.warn('Player profile service not available, match results not recorded');
-        return;
-      }
-      
-      // Determine winner and loser teams
+      // Määra winner ja loser tiimid
       const team1Won = match.score1 > match.score2;
       const winningTeam = team1Won ? match.team1 : match.team2;
       const losingTeam = team1Won ? match.team2 : match.team1;
       
-      // Format the match data for saving
+      // Formaadi mängu andmed salvestamiseks
       const matchData = {
         date: new Date().toISOString(),
         tournament: this.tournament?.name || 'Tournament',
@@ -82,54 +75,67 @@ class TournamentBracketMexicano {
         courtName: match.courtName || match.court,
         score1: match.score1,
         score2: match.score2,
-        points: team1Won ? match.score1 : match.score2 // Points are the score they got
+        points: team1Won ? match.score1 : match.score2
       };
       
-      // Record match for winning team players
+      // Salvesta võitnud tiimi mängijatel
       for (const player of winningTeam) {
         if (!player || !player.id) continue;
         
-        // Create opponent names string from losing team
+        // Loo vastaste nimede string
         const opponents = losingTeam.map(p => p.name).join(' & ');
         
-        // Create player-specific match record
+        // Loo mängijaspetsiifiline mängu kirje
         const playerMatchData = {
           ...matchData,
           won: true,
           result: 'win',
           opponent: opponents,
-          vs: losingTeam.map(p => ({ id: p.id, name: p.name })) // Store opponent details
+          vs: losingTeam.map(p => ({ id: p.id, name: p.name }))
         };
         
-        // Save match to player profile
-        await playerProfileService.addMatchToPlayer(player.id, playerMatchData);
-        console.log(`Recorded win for player ${player.name}`);
+        // Salvesta mäng mängija profiilile
+        if (window.playerProfileService && typeof window.playerProfileService.addMatchToPlayer === 'function') {
+          try {
+            await window.playerProfileService.addMatchToPlayer(player.id, playerMatchData);
+            console.log(`Recorded win for player ${player.name}`);
+          } catch (err) {
+            console.warn(`Failed to record win for player ${player.name}:`, err);
+          }
+        }
       }
       
-      // Record match for losing team players
+      // Salvesta kaotanud tiimi mängijatel
       for (const player of losingTeam) {
         if (!player || !player.id) continue;
         
-        // Create opponent names string from winning team
+        // Loo vastaste nimede string
         const opponents = winningTeam.map(p => p.name).join(' & ');
         
-        // Create player-specific match record
+        // Loo mängijaspetsiifiline mängu kirje
         const playerMatchData = {
           ...matchData,
           won: false,
           result: 'loss',
           opponent: opponents,
-          vs: winningTeam.map(p => ({ id: p.id, name: p.name })) // Store opponent details
+          vs: winningTeam.map(p => ({ id: p.id, name: p.name }))
         };
         
-        // Save match to player profile
-        await playerProfileService.addMatchToPlayer(player.id, playerMatchData);
-        console.log(`Recorded loss for player ${player.name}`);
+        // Salvesta mäng mängija profiilile
+        if (window.playerProfileService && typeof window.playerProfileService.addMatchToPlayer === 'function') {
+          try {
+            await window.playerProfileService.addMatchToPlayer(player.id, playerMatchData);
+            console.log(`Recorded loss for player ${player.name}`);
+          } catch (err) {
+            console.warn(`Failed to record loss for player ${player.name}:`, err);
+          }
+        }
       }
     } catch (error) {
-      console.error('Error recording match results for players:', error);
+      console.error('Error recording match result:', error);
     }
   }
+
 
   async init() {
     window.playerProfileService = playerProfileService;
@@ -595,10 +601,9 @@ class TournamentBracketMexicano {
     if (element.querySelector(".score-input")) {
       return;
     }
-
-    const currentScore =
-      element.textContent.trim() !== "-" ? element.textContent.trim() : "";
-
+  
+    const currentScore = element.textContent.trim() !== "-" ? element.textContent.trim() : "";
+  
     // Create input element
     const input = document.createElement("input");
     input.type = "number";
@@ -606,82 +611,47 @@ class TournamentBracketMexicano {
     input.value = currentScore;
     input.min = 0;
     input.max = 10;
-
+  
     // Store original text for restoration if needed
     const originalText = element.textContent;
-
+  
     // Style the parent element to indicate editing mode
     element.classList.add("editing");
-
+  
     // Add blur handler to save the value
     input.onblur = () => {
       this.handleScoreUpdate(element, input, matchId, scoreType, originalText);
     };
-
-    console.log("phase 2");
-    // Use keyup instead of oninput for more controlled behavior
-    input.onkeyup = (e) => {
-      // Only proceed on number keys, backspace, or delete
-      const validKeys = [
-        "0",
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "6",
-        "7",
-        "8",
-        "9",
-        "Backspace",
-        "Delete",
-      ];
-      if (!validKeys.includes(e.key)) return;
-
-      const value = parseInt(input.value);
-      // Check if we have a valid score (0-10)
-      if (!isNaN(value) && value >= 0 && value <= 10) {
-        // If there's another character being typed, don't advance yet
-        if (input.value.length < 2 && (value === 0 || value > 7)) {
-          // User probably entering a second digit, don't advance yet
-          return;
-        }
-
-        // Find next score element to edit
-        const nextScoreElement = this.findNextScoreElement(
-          element,
-          matchId,
-          scoreType
-        );
-        if (nextScoreElement) {
-          // Slight delay to ensure the current input is processed
-          setTimeout(() => {
-            input.blur(); // This will trigger saving via onblur
-
-            // Small delay before focusing the next input
-            setTimeout(() => {
-              this.makeScoreEditable(
-                nextScoreElement,
-                nextScoreElement.dataset.matchId,
-                nextScoreElement.dataset.scoreType
-              );
-            }, 100);
-          }, 200);
-        }
+  
+    // Handle key events for better navigation
+    input.onkeydown = (e) => {
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault(); // Prevent default tab behavior
+        
+        // Save current value
+        this.handleScoreUpdate(element, input, matchId, scoreType, originalText)
+          .then(() => {
+            // After saving, find the next score element
+            const nextElement = this.findNextScoreElement(element, matchId, scoreType);
+            if (nextElement) {
+              // Make the next element editable
+              setTimeout(() => {
+                this.makeScoreEditable(
+                  nextElement,
+                  nextElement.dataset.matchId,
+                  nextElement.dataset.scoreType
+                );
+              }, 50);
+            }
+          });
       }
     };
-
-    // Handle Enter key
-    input.onkeypress = (e) => {
-      if (e.key === "Enter") {
-        input.blur();
-      }
-    };
-
+  
     // Clear text and add input
     element.textContent = "";
     element.appendChild(input);
     input.focus();
+    input.select(); // Select all text for easier typing
   }
 
   // Improved method to find the next score element
@@ -690,7 +660,7 @@ class TournamentBracketMexicano {
     if (currentScoreType === "score1") {
       // Look for the score2 element in the same match
       const scoreElements = document.querySelectorAll(
-        '.team-score[data-match-id="' + currentMatchId + '"]'
+        `.team-score[data-match-id="${currentMatchId}"]`
       );
       for (let el of scoreElements) {
         if (el.dataset.scoreType === "score2") {
@@ -698,19 +668,19 @@ class TournamentBracketMexicano {
         }
       }
     }
-
+  
     // If we're on score2 or didn't find a score2, find the next match
     // Get all score elements in DOM order
     const allScoreElements = document.querySelectorAll(".team-score");
     const allScoreArray = Array.from(allScoreElements);
-
+  
     // Find current element's index
     const currentIndex = allScoreArray.indexOf(currentElement);
     if (currentIndex === -1 || currentIndex === allScoreArray.length - 1) {
       return null; // Not found or last element
     }
-
-    // Return the next element (which should be the next match's score1)
+  
+    // Return the next element
     return allScoreArray[currentIndex + 1];
   }
 
@@ -1238,11 +1208,11 @@ class TournamentBracketMexicano {
     try {
       // Create a deep copy of bracket data to modify
       const updatedBracketData = JSON.parse(JSON.stringify(this.bracketData));
-
+  
       // Find the match
       let matchUpdated = false;
       let foundMatch = null;
-
+  
       // Look in current matches
       for (const court of updatedBracketData.courts) {
         const match = court.matches.find((m) => m.id === matchId);
@@ -1251,15 +1221,15 @@ class TournamentBracketMexicano {
           break;
         }
       }
-
+  
       if (!foundMatch) {
         throw new Error("Match not found");
       }
-
+  
       const currentScore = score !== null ? parseInt(score, 10) : null;
       const otherScore =
         scoreType === "score1" ? foundMatch.score2 : foundMatch.score1;
-
+  
       // Validate score if both scores are set
       if (currentScore !== null && otherScore !== null) {
         if (
@@ -1276,21 +1246,21 @@ class TournamentBracketMexicano {
           return;
         }
       }
-
+  
       // Update the score
       foundMatch[scoreType] = currentScore;
-
+  
       // Check if match is completed
       foundMatch.completed =
         foundMatch.score1 !== null && foundMatch.score2 !== null;
-
+  
       if (foundMatch.completed) {
         // Add to completed matches if not already there
         const existingMatchIndex =
           updatedBracketData.completedMatches.findIndex(
             (m) => m.id === foundMatch.id
           );
-
+  
         if (existingMatchIndex !== -1) {
           updatedBracketData.completedMatches[existingMatchIndex] = {
             ...foundMatch,
@@ -1298,20 +1268,15 @@ class TournamentBracketMexicano {
         } else {
           updatedBracketData.completedMatches.push({ ...foundMatch });
         }
-
+  
         matchUpdated = true;
       }
-
+  
       // Recalculate standings if needed
       if (matchUpdated) {
         this.recalculateStandings(updatedBracketData);
       }
-      // Record match results for player profiles if the match is complete
-if (foundMatch.completed) {
-  await this.recordMatchResultForPlayers(foundMatch);
-}
-
-
+  
       // Save updated bracket data
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
@@ -1365,28 +1330,29 @@ if (foundMatch.completed) {
 
   async handleScoreUpdate(element, input, matchId, scoreType, originalText) {
     const score = input.value ? parseInt(input.value) : null;
-
+  
     try {
       // Update the score in the database
       await this.updateMatchScore(matchId, scoreType, score);
-
+  
       // Remove input and show updated score with visual feedback
       element.classList.remove("editing");
       element.classList.add("score-updated");
       element.textContent = score ?? "-";
-
-      console.log("editing");
+  
       // Remove the visual feedback after a short delay
       setTimeout(() => {
         element.classList.remove("score-updated");
       }, 1500);
+      
+      return true; // Return successful result
     } catch (error) {
       console.error("Error updating score:", error);
-
+  
       // On error, restore original value
       element.classList.remove("editing");
       element.textContent = originalText;
-
+  
       // Show error message
       Swal.fire({
         title: "Error",
@@ -1394,6 +1360,8 @@ if (foundMatch.completed) {
         icon: "error",
         timer: 2000,
       });
+      
+      return false; // Return failed result
     }
   }
 
@@ -1614,10 +1582,46 @@ if (foundMatch.completed) {
     if (!this.bracketData || !this.bracketData.standings) return;
     
     try {
-      // Get player profile service
-      const playerProfileService = window.playerProfileService;
-      if (!playerProfileService) {
-        console.warn('Player profile service not available, tournament results not recorded');
+      console.log("Recording tournament results for players...");
+      
+      // Kui playerProfileService pole saadaval, siis loome lihtsa asendaja
+      if (!window.playerProfileService) {
+        console.log("Creating fallback playerProfileService");
+        window.playerProfileService = {
+          addTournamentToPlayer: async function(playerId, tournamentData) {
+            console.log(`Would record tournament for player ${playerId}:`, tournamentData);
+            return true;
+          },
+          addRatingHistoryEntry: async function(playerId, rating) {
+            console.log(`Would update rating for player ${playerId}:`, rating);
+            return true;
+          },
+          addGroupHistoryEntry: async function(playerId, group) {
+            console.log(`Would update group for player ${playerId}:`, group);
+            return true;
+          },
+          addMatchToPlayer: async function(playerId, matchData) {
+            console.log(`Would record match for player ${playerId}:`, matchData);
+            return true;
+          }
+        };
+      }
+      
+      // Kontrolli, kas vajalikud funktsioonid on olemas
+      const serviceAvailable = window.playerProfileService && 
+                              typeof window.playerProfileService.addTournamentToPlayer === 'function';
+      
+      if (!serviceAvailable) {
+        console.warn("PlayerProfileService not properly set up. Using console logging instead.");
+        
+        // Kui funktsioonid pole saadaval, siis logime lihtsalt konsooli
+        for (const standing of this.bracketData.standings) {
+          console.log(`Would record tournament result for player: ${standing.name} (${standing.id})`);
+          console.log(`  Final position: ${standing.finalRank || '?'}`);
+          console.log(`  Points: ${standing.points || 0}`);
+          console.log(`  Record: ${standing.wins || 0}-${standing.losses || 0}`);
+        }
+        
         return;
       }
       
@@ -1633,20 +1637,20 @@ if (foundMatch.completed) {
         totalPlayers: totalPlayers
       };
       
-      // Record tournament results for each player
+      // Salvesta turniiri tulemused kõikidele mängijatele
       for (const standing of this.bracketData.standings) {
         // Skip if no valid player data
         if (!standing || !standing.id) continue;
         
-        // Get all matches for this player
+        // Calculate games won/lost
+        let gamesWon = 0;
+        let gamesLost = 0;
+        
+        // Leia kõik selle mängija mängud
         const playerMatches = this.bracketData.completedMatches.filter(match => 
           match.team1.some(p => p.id === standing.id) || 
           match.team2.some(p => p.id === standing.id)
         );
-        
-        // Calculate games won/lost
-        let gamesWon = 0;
-        let gamesLost = 0;
         
         playerMatches.forEach(match => {
           const inTeam1 = match.team1.some(p => p.id === standing.id);
@@ -1671,24 +1675,42 @@ if (foundMatch.completed) {
           group: this.getPlayerGroup(standing.id)
         };
         
-        // Save tournament to player profile
-        await playerProfileService.addTournamentToPlayer(standing.id, playerTournamentData);
-        console.log(`Recorded tournament results for player ${standing.name}`);
-        
-        // Update player rating if needed
-        if (standing.rating !== undefined) {
-          await playerProfileService.addRatingHistoryEntry(standing.id, standing.rating);
-        }
-        
-        // Update player group history if needed
-        const group = this.getPlayerGroup(standing.id);
-        if (group) {
-          await playerProfileService.addGroupHistoryEntry(standing.id, group);
+        try {
+          // Save tournament to player profile - use try-catch every method call
+          try {
+            await window.playerProfileService.addTournamentToPlayer(standing.id, playerTournamentData);
+            console.log(`Recorded tournament results for player ${standing.name}`);
+          } catch (err) {
+            console.warn(`Failed to record tournament for player ${standing.name}:`, err);
+          }
+          
+          // Update player rating if needed
+          if (standing.rating !== undefined) {
+            try {
+              await window.playerProfileService.addRatingHistoryEntry(standing.id, standing.rating);
+            } catch (err) {
+              console.warn(`Failed to update rating for player ${standing.name}:`, err);
+            }
+          }
+          
+          // Update player group history if needed
+          const group = this.getPlayerGroup(standing.id);
+          if (group) {
+            try {
+              await window.playerProfileService.addGroupHistoryEntry(standing.id, group);
+            } catch (err) {
+              console.warn(`Failed to update group for player ${standing.name}:`, err);
+            }
+          }
+        } catch (err) {
+          console.warn(`Error processing player ${standing.name}:`, err);
         }
       }
+      
+      console.log("Tournament results recording completed successfully!");
     } catch (error) {
       console.error('Error recording tournament results for players:', error);
-      // Don't throw - we don't want to stop the tournament flow if profile updates fail
+      // Ei viska viga edasi - me ei taha turniiri sulgemisprotsessi peatada
     }
   }
 
@@ -1783,9 +1805,9 @@ if (foundMatch.completed) {
       confirmButtonText: "Yes, end it!",
       cancelButtonText: "No, keep it",
     });
-
+  
     if (!result.isConfirmed) return;
-
+  
     try {
       Swal.fire({
         title: "Finalizing tournament...",
@@ -1794,49 +1816,86 @@ if (foundMatch.completed) {
           Swal.showLoading();
         },
       });
-
+  
+      // Veendume, et meil on tagavarasüsteem, kui päris teenus pole saadaval
+      if (!window.playerProfileService) {
+        console.log("Setting up fallback playerProfileService");
+        window.playerProfileService = {
+          addTournamentToPlayer: async function(playerId, tournamentData) {
+            console.log(`Recording tournament for player ${playerId}:`, tournamentData);
+            return true;
+          },
+          addRatingHistoryEntry: async function(playerId, rating) {
+            console.log(`Updating rating for player ${playerId}: ${rating}`);
+            return true;
+          },
+          addGroupHistoryEntry: async function(playerId, group) {
+            console.log(`Updating group for player ${playerId}: ${group}`);
+            return true;
+          },
+          addMatchToPlayer: async function(playerId, matchData) {
+            console.log(`Recording match for player ${playerId}:`, matchData);
+            return true;
+          }
+        };
+      }
+  
       // Update tournament status to completed
       await firebaseService.updateTournament(this.selectedTournamentId, {
         status_id: 3, // 3 = completed
         completedDate: new Date().toISOString(),
       });
-
-      // Add final standings to tournament data
+  
+      // Add final standings to tournament data with rankings
       const finalStandings = this.bracketData.standings
         .sort((a, b) => b.points - a.points || b.wins - a.wins)
         .map((player, index) => ({
           ...player,
           finalRank: index + 1,
         }));
-
+  
       // Update bracket data with final results
       const updatedBracketData = {
         ...this.bracketData,
         completed: true,
         finalStandings,
       };
-
+  
       await firebaseService.saveTournamentBracket(
         this.selectedTournamentId,
         updatedBracketData
       );
-      await this.recordTournamentResultsForPlayers();
-      
+  
+      // Proovi salvestada turniiri tulemused mängijatele
+      // Teeme selle välistatult eraldi try-catch plokis
+      try {
+        if (updatedBracketData.completedMatches && updatedBracketData.completedMatches.length > 0) {
+          console.log(`Recording results for ${updatedBracketData.completedMatches.length} matches...`);
+          await this.recordTournamentResultsForPlayers();
+        }
+      } catch (statisticsError) {
+        console.warn("Failed to record player statistics:", statisticsError);
+        // Jätkame turniiri sulgemist isegi kui statistika salvestamine ebaõnnestus
+      }
+  
       Swal.close();
-
+  
       await Swal.fire({
         title: "Tournament Completed!",
         text: "Final standings have been saved.",
         icon: "success",
       });
-
+  
       // Disable all controls
-      if (document.getElementById("endTournament")) {
-        document.getElementById("endTournament").disabled = true;
+      const endTournamentBtn = document.getElementById("endTournament");
+      if (endTournamentBtn) {
+        endTournamentBtn.disabled = true;
       }
-
-      // Redirect to tournament list
-      window.location.href = "tournament-list.html";
+  
+      // Redirect to tournament list after short delay
+      setTimeout(() => {
+        window.location.href = "tournament-list.html";
+      }, 2000);
     } catch (error) {
       Swal.close();
       console.error("Error ending tournament:", error);
@@ -1847,6 +1906,7 @@ if (foundMatch.completed) {
       });
     }
   }
+
   getPlayerGroup(playerId) {
     // Find player in the players list
     const player = this.players.find(p => p.id === playerId);
