@@ -153,6 +153,8 @@ class TournamentBracketAmericano {
       // Wait for initial data
       await this.waitForData();
       
+      await this.updateTournamentStatus();
+
       try { Swal.close(); } catch (e) {}
       
       if (this.tournament && this.tournamentNameElement) {
@@ -287,6 +289,50 @@ class TournamentBracketAmericano {
       }
     }
   }
+
+  /**
+ * Updates tournament status to "ongoing" if it's currently "upcoming"
+ * @returns {Promise<boolean>} Success indicator
+ */
+async updateTournamentStatus() {
+  try {
+    // Only update if tournament and bracketData are loaded
+    if (!this.tournament || !this.bracketData) return false;
+    
+    // Only update if status is "upcoming" (status_id = 1)
+    if (this.tournament.status_id !== 1) return false;
+    
+    // Check if bracket has any matches or completed matches
+    const hasMatches = 
+      (this.bracketData.rounds && this.bracketData.rounds.some(round => 
+        round.matches && round.matches.length > 0
+      )) || 
+      (this.bracketData.completedMatches && this.bracketData.completedMatches.length > 0);
+    
+    if (!hasMatches) {
+      console.log('Not updating tournament status - no matches found in bracket');
+      return false;
+    }
+    
+    console.log('Updating tournament status from upcoming to ongoing');
+    
+    // Update status to "ongoing" (status_id = 2)
+    await firebaseService.updateTournament(
+      this.selectedTournamentId, 
+      { 
+        status_id: 2
+      }
+    );
+    
+    console.log('Tournament status updated successfully');
+    // Update local tournament data
+    this.tournament.status_id = 2;
+    return true;
+  } catch (error) {
+    console.error('Error updating tournament status:', error);
+    return false;
+  }
+}
   
   // Add a method to handle round selection with state persistence
   handleRoundTabClick(roundNumber) {
@@ -1278,6 +1324,8 @@ class TournamentBracketAmericano {
 }
 
 
+
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   window.bracketApp = new TournamentBracketAmericano();
@@ -1330,4 +1378,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('beforeunload', () => {
     window.bracketApp.cleanup();
   });
+
+  
+
+
 });

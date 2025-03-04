@@ -30,6 +30,13 @@ class TournamentRoutingService {
    * @returns {Promise<void>}
    */
   // In routing-service.js
+/**
+ * Routes to the appropriate page based on tournament data
+ * @param {string} tournamentId - The tournament ID to route to
+ * @param {Object} tournamentData - Optional tournament data (if already loaded)
+ * @param {boolean} forceBracket - Force routing to bracket view
+ * @returns {Promise<void>}
+ */
 async routeToTournament(tournamentId, tournamentData = null, forceBracket = false) {
   try {
     // Store the tournament ID for future reference
@@ -49,7 +56,45 @@ async routeToTournament(tournamentId, tournamentData = null, forceBracket = fals
       return this.routeToTournamentBracket(tournament);
     }
     
-    // Route based on tournament status
+    // Additional check: If tournament is marked as upcoming but has bracket data, check if we should
+    // treat it as ongoing based on bracket status
+    if (tournament.status_id === this.STATUS.UPCOMING) {
+      try {
+        // Check if bracket data exists for either format
+        let bracketData = null;
+        
+        // Try Americano format first
+        if (tournament.format?.toLowerCase() === 'americano') {
+          bracketData = await firebaseService.getTournamentBracketAmericano(tournamentId);
+        } else {
+          // Try standard format
+          bracketData = await firebaseService.getTournamentBracket(tournamentId);
+        }
+        
+        // If we have bracket data with matches, treat it as ongoing
+        if (bracketData) {
+          const hasMatches = 
+            (bracketData.rounds && bracketData.rounds.some(round => 
+              round.matches && round.matches.length > 0
+            )) || 
+            (bracketData.completedMatches && bracketData.completedMatches.length > 0) ||
+            (bracketData.courts && bracketData.courts.some(court => 
+              court.matches && court.matches.length > 0
+            ));
+            
+          if (hasMatches) {
+            console.log('Tournament has matches but status is upcoming - treating as ongoing');
+            // Route to bracket view but don't change the status here - bracket page will handle that
+            return this.routeToTournamentBracket(tournament);
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking bracket data in routing:', err);
+        // Continue with normal routing if error occurs
+      }
+    }
+    
+    // Standard routing based on tournament status
     switch (tournament.status_id) {
       case this.STATUS.COMPLETED:
         // Completed tournaments go to stats view

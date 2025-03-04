@@ -391,9 +391,19 @@ class MexicanoManagementController extends TournamentManagementController {
           this.bracketData.courts[i].matches = [match];
         }
       }
-      
+      console.log('Updating tournament status to ongoing');
       // Update round number
       this.bracketData.currentRound = 1;
+      
+      // Update tournament status to ongoing if it's currently upcoming
+      if (this.tournamentData.status_id === 1) {
+       
+        await tournamentService.updateTournamentStatus(
+          this.selectedTournamentId,
+          { status_id: 2, updated_at: firebaseService.timestamp() }
+        );
+        this.tournamentData.status_id = 2; // Update local data
+      }
       
       // Save to Firebase
       await tournamentService.saveBracketData(

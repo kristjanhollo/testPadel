@@ -300,6 +300,16 @@ class AmericanoManagementController extends TournamentManagementController {
         this.tournamentPlayers
       );
       
+      // Update tournament status if needed (when initial bracket creation)
+      if (this.bracketData && this.tournamentData.status_id === 1) {
+        console.log('Updating tournament status to ongoing');
+        await tournamentService.updateTournament(
+          this.selectedTournamentId,
+          { status_id: 2, updated_at: firebaseService.timestamp() }
+        );
+        this.tournamentData.status_id = 2; // Update local data
+      }
+      
       this.hideLoading();
       
       // Ask if user wants to go directly to the bracket view

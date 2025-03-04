@@ -178,8 +178,10 @@ class TournamentService {
    * @returns {Promise<boolean>} Success indicator
    */
   async updateTournamentStatus(tournamentId, statusId) {
+    console.log('Tournament status updated:!', tournamentId, statusId);
     try {
       return await firebaseService.updateTournament(tournamentId, { status_id: statusId });
+      
     } catch (error) {
       console.error('TournamentService: Error updating tournament status:', error);
       throw error;
