@@ -32,6 +32,7 @@ class MexicanoService {
     
     return bracketData;
   }
+
   
   /**
    * Generate first round matches for Mexicano format

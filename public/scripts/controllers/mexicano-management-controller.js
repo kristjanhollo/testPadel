@@ -400,7 +400,7 @@ class MexicanoManagementController extends TournamentManagementController {
        
         await tournamentService.updateTournamentStatus(
           this.selectedTournamentId,
-          { status_id: 2, updated_at: firebaseService.timestamp() }
+          { status_id: 2}
         );
         this.tournamentData.status_id = 2; // Update local data
       }

@@ -49,7 +49,7 @@ module.exports = (env, argv) => {
       'player-profile': './public/scripts/player-profile.js',
       'player-rankings': './public/scripts/player-rankings.js',
       'tournament-bracket-americano': './public/scripts/tournament-bracket-Americano.js',
-      'tournament-bracket-m': './public/scripts/controllers/mexicano-bracket-controller.js',
+      'tournament-bracket-m': './public/scripts/tournament-bracket-Mexicano.js',
       'tournament-create': './public/scripts/tournament-create.js',
       'tournament-list': './public/scripts/tournament-list.js',
       'tournament-management': './public/scripts/tournament-management.js',
