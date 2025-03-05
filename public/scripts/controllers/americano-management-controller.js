@@ -89,7 +89,7 @@ class AmericanoManagementController extends TournamentManagementController {
     const hasEmptyGroups = Object.values(groupedPlayers).some(group => group.length === 0);
     
     if (hasEmptyGroups) {
-      console.log("Some groups are empty, assigning players by rating");
+      console.log('Some groups are empty, assigning players by rating');
       
       // Reset groups
       this.GROUP_COLORS.forEach(color => {

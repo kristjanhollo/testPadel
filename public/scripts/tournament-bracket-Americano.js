@@ -294,45 +294,45 @@ class TournamentBracketAmericano {
  * Updates tournament status to "ongoing" if it's currently "upcoming"
  * @returns {Promise<boolean>} Success indicator
  */
-async updateTournamentStatus() {
-  try {
+  async updateTournamentStatus() {
+    try {
     // Only update if tournament and bracketData are loaded
-    if (!this.tournament || !this.bracketData) return false;
+      if (!this.tournament || !this.bracketData) return false;
     
-    // Only update if status is "upcoming" (status_id = 1)
-    if (this.tournament.status_id !== 1) return false;
+      // Only update if status is "upcoming" (status_id = 1)
+      if (this.tournament.status_id !== 1) return false;
     
-    // Check if bracket has any matches or completed matches
-    const hasMatches = 
+      // Check if bracket has any matches or completed matches
+      const hasMatches = 
       (this.bracketData.rounds && this.bracketData.rounds.some(round => 
         round.matches && round.matches.length > 0
       )) || 
       (this.bracketData.completedMatches && this.bracketData.completedMatches.length > 0);
     
-    if (!hasMatches) {
-      console.log('Not updating tournament status - no matches found in bracket');
+      if (!hasMatches) {
+        console.log('Not updating tournament status - no matches found in bracket');
+        return false;
+      }
+    
+      console.log('Updating tournament status from upcoming to ongoing');
+    
+      // Update status to "ongoing" (status_id = 2)
+      await firebaseService.updateTournament(
+        this.selectedTournamentId, 
+        { 
+          status_id: 2
+        }
+      );
+    
+      console.log('Tournament status updated successfully');
+      // Update local tournament data
+      this.tournament.status_id = 2;
+      return true;
+    } catch (error) {
+      console.error('Error updating tournament status:', error);
       return false;
     }
-    
-    console.log('Updating tournament status from upcoming to ongoing');
-    
-    // Update status to "ongoing" (status_id = 2)
-    await firebaseService.updateTournament(
-      this.selectedTournamentId, 
-      { 
-        status_id: 2
-      }
-    );
-    
-    console.log('Tournament status updated successfully');
-    // Update local tournament data
-    this.tournament.status_id = 2;
-    return true;
-  } catch (error) {
-    console.error('Error updating tournament status:', error);
-    return false;
   }
-}
   
   // Add a method to handle round selection with state persistence
   handleRoundTabClick(roundNumber) {
@@ -877,7 +877,7 @@ async updateTournamentStatus() {
       pink: this.players.filter(p => this.determineInitialGroup(p) === 'pink')
     };
     
-    console.log("Player group counts:", {
+    console.log('Player group counts:', {
       green: groupedPlayers.green.length,
       blue: groupedPlayers.blue.length,
       yellow: groupedPlayers.yellow.length,
@@ -885,18 +885,18 @@ async updateTournamentStatus() {
     });
     
     // Create Round 1 matches (Americano pattern according to table: 1&4 vs 2&3)
-    console.log("Creating Round 1 with Americano pattern: 1&4 vs 2&3");
+    console.log('Creating Round 1 with Americano pattern: 1&4 vs 2&3');
     this.createRoundWithPattern(bracketData, 1, groupedPlayers, [0, 3], [1, 2]);
     
     // Create Round 2 matches (Americano pattern according to table: 1&2 vs 3&4)
-    console.log("Creating Round 2 with Americano pattern: 1&2 vs 3&4");
+    console.log('Creating Round 2 with Americano pattern: 1&2 vs 3&4');
     this.createRoundWithPattern(bracketData, 2, groupedPlayers, [0, 1], [2, 3]);
     
     // Create Round 3 (mix round) - follows specific rules from the table
     this.createMixRound(bracketData, groupedPlayers);
     
     // Create Round 4 matches (Americano pattern according to table: 1&3 vs 2&4)
-    console.log("Creating Round 4 with Americano pattern: 1&3 vs 2&4");
+    console.log('Creating Round 4 with Americano pattern: 1&3 vs 2&4');
     this.createRoundWithPattern(bracketData, 4, groupedPlayers, [0, 2], [1, 3]);
   }
   
@@ -1091,10 +1091,10 @@ async updateTournamentStatus() {
         // Fall back to rating if groupOrder is missing
         return (b.ranking || 0) - (a.ranking || 0);
       });
-      console.log("Players in group (sorted by saved order):");
+      console.log('Players in group (sorted by saved order):');
     } else {
       sortedPlayers = this.sortPlayersByRating(groupPlayers);
-      console.log("Players in group (sorted by rating):");
+      console.log('Players in group (sorted by rating):');
     }
     
     sortedPlayers.forEach((player, idx) => {
@@ -1166,7 +1166,7 @@ async updateTournamentStatus() {
         this.sortPlayersByRating(groupedPlayers.pink)
     };
     
-    console.log("Mix round sorted groups:", {
+    console.log('Mix round sorted groups:', {
       green: sortedGroups.green.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
       blue: sortedGroups.blue.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
       yellow: sortedGroups.yellow.map(p => `${p.name} (${p.groupOrder !== undefined ? 'order:' + p.groupOrder : 'rating:' + p.ranking})`),
@@ -1174,12 +1174,12 @@ async updateTournamentStatus() {
     });
     
     // Create mix matches according to Exceli table rules
-    console.log("Creating Mix Round matches according to Exceli table rules");
+    console.log('Creating Mix Round matches according to Exceli table rules');
     
     // Green + Blue mix (Padel Arenas + Coolbet)
     if (sortedGroups.green.length >= 2 && sortedGroups.blue.length >= 2) {
       // Green 1 & Blue 2 vs Green 2 & Blue 1
-      console.log("Creating match: Green 1 & Blue 2 vs Green 2 & Blue 1");
+      console.log('Creating match: Green 1 & Blue 2 vs Green 2 & Blue 1');
       this.createMixMatch(
         roundData,
         [sortedGroups.green[0], sortedGroups.blue[1]],  // Green 1 & Blue 2
@@ -1190,7 +1190,7 @@ async updateTournamentStatus() {
       
       if (sortedGroups.green.length >= 4 && sortedGroups.blue.length >= 4) {
         // Green 3 & Blue 4 vs Green 4 & Blue 3
-        console.log("Creating match: Green 3 & Blue 4 vs Green 4 & Blue 3");
+        console.log('Creating match: Green 3 & Blue 4 vs Green 4 & Blue 3');
         this.createMixMatch(
           roundData,
           [sortedGroups.green[2], sortedGroups.blue[3]],  // Green 3 & Blue 4
@@ -1204,7 +1204,7 @@ async updateTournamentStatus() {
     // Yellow + Pink mix (Lux Express + 3p Logistics)
     if (sortedGroups.yellow.length >= 2 && sortedGroups.pink.length >= 2) {
       // Yellow 1 & Pink 2 vs Yellow 2 & Pink 1
-      console.log("Creating match: Yellow 1 & Pink 2 vs Yellow 2 & Pink 1");
+      console.log('Creating match: Yellow 1 & Pink 2 vs Yellow 2 & Pink 1');
       this.createMixMatch(
         roundData,
         [sortedGroups.yellow[0], sortedGroups.pink[1]],  // Yellow 1 & Pink 2
@@ -1215,7 +1215,7 @@ async updateTournamentStatus() {
       
       if (sortedGroups.yellow.length >= 4 && sortedGroups.pink.length >= 4) {
         // Yellow 3 & Pink 4 vs Yellow 4 & Pink 3
-        console.log("Creating match: Yellow 3 & Pink 4 vs Yellow 4 & Pink 3");
+        console.log('Creating match: Yellow 3 & Pink 4 vs Yellow 4 & Pink 3');
         this.createMixMatch(
           roundData,
           [sortedGroups.yellow[2], sortedGroups.pink[3]],  // Yellow 3 & Pink 4

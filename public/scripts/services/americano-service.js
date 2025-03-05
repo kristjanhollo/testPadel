@@ -122,7 +122,7 @@ class AmericanoService {
       
       // Green 1 & Blue 2 vs Green 2 & Blue 1
       const match1 = this.createMatch(
-        `match-r3-green-blue-1`,
+        'match-r3-green-blue-1',
         'Mix Round',
         [greenSorted[0], blueSorted[1]],
         [greenSorted[1], blueSorted[0]],
@@ -136,7 +136,7 @@ class AmericanoService {
       if (greenSorted.length >= 4 && blueSorted.length >= 4) {
         // Green 3 & Blue 4 vs Green 4 & Blue 3
         const match2 = this.createMatch(
-          `match-r3-green-blue-2`,
+          'match-r3-green-blue-2',
           'Mix Round',
           [greenSorted[2], blueSorted[3]],
           [greenSorted[3], blueSorted[2]],
@@ -155,7 +155,7 @@ class AmericanoService {
       
       // Yellow 1 & Pink 2 vs Yellow 2 & Pink 1
       const match1 = this.createMatch(
-        `match-r3-yellow-pink-1`,
+        'match-r3-yellow-pink-1',
         'Mix Round',
         [yellowSorted[0], pinkSorted[1]],
         [yellowSorted[1], pinkSorted[0]],
@@ -169,7 +169,7 @@ class AmericanoService {
       if (yellowSorted.length >= 4 && pinkSorted.length >= 4) {
         // Yellow 3 & Pink 4 vs Yellow 4 & Pink 3
         const match2 = this.createMatch(
-          `match-r3-yellow-pink-2`,
+          'match-r3-yellow-pink-2',
           'Mix Round',
           [yellowSorted[2], pinkSorted[3]],
           [yellowSorted[3], pinkSorted[2]],

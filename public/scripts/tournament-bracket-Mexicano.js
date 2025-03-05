@@ -184,8 +184,8 @@ class TournamentBracketMexicano {
     // Check for completed tournament
     this.checkRoundCompletion();
 
-     // Render round tabs for navigation
-     this.renderRoundTabs();
+    // Render round tabs for navigation
+    this.renderRoundTabs();
   }
   
   setupEventListeners() {
@@ -224,45 +224,45 @@ class TournamentBracketMexicano {
  * Updates tournament status to "ongoing" if it's currently "upcoming"
  * @returns {Promise<boolean>} Success indicator
  */
-async updateTournamentStatus() {
-  try {
+  async updateTournamentStatus() {
+    try {
     // Only update if tournament and bracketData are loaded
-    if (!this.tournament || !this.bracketData) return false;
+      if (!this.tournament || !this.bracketData) return false;
     
-    // Only update if status is "upcoming" (status_id = 1)
-    if (this.tournament.status_id !== 1) return false;
+      // Only update if status is "upcoming" (status_id = 1)
+      if (this.tournament.status_id !== 1) return false;
     
-    // Check if bracket has any matches or completed matches
-    const hasMatches = 
+      // Check if bracket has any matches or completed matches
+      const hasMatches = 
       (this.bracketData.completedMatches && this.bracketData.completedMatches.length > 0) ||
       (this.bracketData.courts && this.bracketData.courts.some(court => 
         court.matches && court.matches.length > 0
       ));
     
-    if (!hasMatches) {
-      console.log('Not updating tournament status - no matches found in bracket');
+      if (!hasMatches) {
+        console.log('Not updating tournament status - no matches found in bracket');
+        return false;
+      }
+    
+      console.log('Updating tournament status from upcoming to ongoing');
+    
+      // Update status to "ongoing" (status_id = 2)
+      await firebaseService.updateTournament(
+        this.selectedTournamentId, 
+        { 
+          status_id: 2
+        }
+      );
+    
+      console.log('Tournament status updated successfully');
+      // Update local tournament data
+      this.tournament.status_id = 2;
+      return true;
+    } catch (error) {
+      console.error('Error updating tournament status:', error);
       return false;
     }
-    
-    console.log('Updating tournament status from upcoming to ongoing');
-    
-    // Update status to "ongoing" (status_id = 2)
-    await firebaseService.updateTournament(
-      this.selectedTournamentId, 
-      { 
-        status_id: 2
-      }
-    );
-    
-    console.log('Tournament status updated successfully');
-    // Update local tournament data
-    this.tournament.status_id = 2;
-    return true;
-  } catch (error) {
-    console.error('Error updating tournament status:', error);
-    return false;
   }
-}
 
   async confirmPreviousRoundEdit(roundNumber) {
     // Ask user to confirm they want to edit a previous round
@@ -393,48 +393,48 @@ async updateTournamentStatus() {
   }
 
   // Add this method to your TournamentBracketMexicano class
-renderRoundContent(roundNumber) {
-  if (!this.roundContent) return;
+  renderRoundContent(roundNumber) {
+    if (!this.roundContent) return;
 
-  // Clear previous content
-  this.roundContent.innerHTML = '';
+    // Clear previous content
+    this.roundContent.innerHTML = '';
   
-  // Get matches for this round
-  const roundMatches = this.bracketData.completedMatches.filter(
-    match => match.round === roundNumber
-  );
+    // Get matches for this round
+    const roundMatches = this.bracketData.completedMatches.filter(
+      match => match.round === roundNumber
+    );
   
-  if (roundMatches.length === 0) {
-    this.roundContent.innerHTML = `
+    if (roundMatches.length === 0) {
+      this.roundContent.innerHTML = `
       <div class="empty-section">No match data available for Round ${roundNumber}</div>
     `;
-    return;
-  }
-  
-  // Group matches by court
-  const courtMatches = {};
-  roundMatches.forEach(match => {
-    if (!courtMatches[match.courtName]) {
-      courtMatches[match.courtName] = [];
+      return;
     }
-    courtMatches[match.courtName].push(match);
-  });
   
-  // Create section for each court
-  Object.keys(courtMatches).forEach(courtName => {
-    const courtSection = document.createElement('div');
-    courtSection.className = 'court-section';
-    courtSection.innerHTML = `<h4>${courtName}</h4>`;
+    // Group matches by court
+    const courtMatches = {};
+    roundMatches.forEach(match => {
+      if (!courtMatches[match.courtName]) {
+        courtMatches[match.courtName] = [];
+      }
+      courtMatches[match.courtName].push(match);
+    });
+  
+    // Create section for each court
+    Object.keys(courtMatches).forEach(courtName => {
+      const courtSection = document.createElement('div');
+      courtSection.className = 'court-section';
+      courtSection.innerHTML = `<h4>${courtName}</h4>`;
     
-    const matchesContainer = document.createElement('div');
-    matchesContainer.className = 'matches-container';
+      const matchesContainer = document.createElement('div');
+      matchesContainer.className = 'matches-container';
     
-    // Add each match
-    courtMatches[courtName].forEach(match => {
-      const team1Won = (match.score1 > match.score2);
-      const matchCard = document.createElement('div');
-      matchCard.className = 'match-card';
-      matchCard.innerHTML = `
+      // Add each match
+      courtMatches[courtName].forEach(match => {
+        const team1Won = (match.score1 > match.score2);
+        const matchCard = document.createElement('div');
+        matchCard.className = 'match-card';
+        matchCard.innerHTML = `
         <div class="team-row ${team1Won ? 'winner' : ''}">
           <div class="team-names">${this.getTeamNames(match.team1)}</div>
           <div class="team-score" 
@@ -455,13 +455,13 @@ renderRoundContent(roundNumber) {
         </div>
       `;
       
-      matchesContainer.appendChild(matchCard);
-    });
+        matchesContainer.appendChild(matchCard);
+      });
     
-    courtSection.appendChild(matchesContainer);
-    this.roundContent.appendChild(courtSection);
-  });
-}
+      courtSection.appendChild(matchesContainer);
+      this.roundContent.appendChild(courtSection);
+    });
+  }
   
   makeScoreEditable(element, matchId, scoreType) {
     // Check if we're already editing this score
@@ -968,9 +968,15 @@ renderRoundContent(roundNumber) {
     // If no matches are found, show a message
     if (this.currentMatches.children.length === 0) {
       this.currentMatches.innerHTML = `
-        <div class="no-matches-message">
+        <div class="no-matches-message" style="display: ${this.bracketData.currentRound >= 4 ? 'none' : 'block'}>
           <p>No active matches found for this round.</p>
-          <button class="btn-primary" id="generateRoundBtn">Generate Matches for Round ${this.bracketData.currentRound + 1}</button>
+          <button 
+            class="btn-primary" 
+            id="generateRoundBtn"  style="display: ${this.bracketData.currentRound >= 4 ? 'none' : 'block'}
+            
+          >
+            Generate Matches for Round ${this.bracketData.currentRound + 1}
+          </button>
         </div>
       `;
       

@@ -84,10 +84,10 @@ class TournamentList {
 
   createTournamentCard(tournament) {
     console.log(`Tournament "${tournament.name}" data:`, {
-        participants: tournament.participants,
-        maxParticipants: tournament.maxParticipants,
-        participants_type: typeof tournament.participants,
-        status: tournament.status_id
+      participants: tournament.participants,
+      maxParticipants: tournament.maxParticipants,
+      participants_type: typeof tournament.participants,
+      status: tournament.status_id
     });
     
     const card = document.createElement('div');
